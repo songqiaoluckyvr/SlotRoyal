@@ -7,7 +7,7 @@ export interface LevelDef {
 export function getLevelConfig(level: number): LevelDef {
   return {
     level,
-    target: 100 * Math.pow(2, level),  // $200, $400, $800, $1600, $3200...
+    target: Math.round(50 * Math.pow(2, level)),  // Earnings target: $100, $200, $400, $800, $1600...
     spins: 25,
   };
 }

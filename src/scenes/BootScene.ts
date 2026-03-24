@@ -11,6 +11,10 @@ export class BootScene extends Phaser.Scene {
     for (const sym of SYMBOLS) {
       this.load.image(sym.id, `/symbols/${sym.id}.png`);
     }
+
+    // Load UI assets
+    this.load.image('logo', '/ui/logo.png');
+    this.load.image('spin_btn', '/ui/spin_button.png');
   }
 
   create(): void {

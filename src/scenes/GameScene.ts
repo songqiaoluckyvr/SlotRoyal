@@ -22,6 +22,7 @@ import { SlotGrid } from '../ui/SlotGrid';
 import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
 import { rng } from '../utils/Rng';
+import { Starfield } from '../ui/Starfield';
 
 type GamePhase = 'idle' | 'spinning' | 'powerup';
 
@@ -31,18 +32,22 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private powerupSlots!: PowerupSlots;
   private phase: GamePhase = 'idle';
+  private warnBorder?: Phaser.GameObjects.Rectangle;
+  private starfield!: Starfield;
 
   constructor() {
     super('Game');
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor('#1a1a2e');
+    this.cameras.main.setBackgroundColor('#0a0a1a');
     this.state = createInitialState();
     this.phase = 'idle';
 
+    this.starfield = new Starfield(this);
+
     this.grid = new SlotGrid(this);
-    this.grid.build(this.state.gridRows, this.state.gridCols, 400, 270);
+    this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
 
     this.hud = new HUD(this);
     this.powerupSlots = new PowerupSlots(this, 15, 120);
@@ -50,17 +55,16 @@ export class GameScene extends Phaser.Scene {
 
     // Wire buttons
     this.hud.spinBtn.on('pointerdown', () => this.onSpin());
-    this.hud.betUpBtn.on('pointerdown', () => {
-      setBet(this.state, this.state.currentBet + this.hud.getDenom());
+    this.hud.onBetChange = (bet: number) => {
+      setBet(this.state, bet);
       this.refreshUI();
       this.hud.setSpinEnabled(canSpin(this.state));
-    });
-    this.hud.betDownBtn.on('pointerdown', () => {
-      setBet(this.state, this.state.currentBet - this.hud.getDenom());
-      this.refreshUI();
-      this.hud.setSpinEnabled(canSpin(this.state));
-    });
+    };
     this.hud.skipBtn.on('pointerdown', () => this.onSkipLevel());
+  }
+
+  update(_time: number, delta: number): void {
+    this.starfield.update(delta);
   }
 
   private refreshUI(): void {
@@ -105,6 +109,24 @@ export class GameScene extends Phaser.Scene {
 
     this.refreshUI();
 
+    // Red border warning when spins are low
+    const totalSpins = this.state.spinsRemaining + this.state.freeSpinsRemaining;
+    if (totalSpins <= 5 && totalSpins > 0) {
+      if (!this.warnBorder) {
+        const W = this.cameras.main.width;
+        const H = this.cameras.main.height;
+        this.warnBorder = this.add.rectangle(W / 2, H / 2, W, H)
+          .setStrokeStyle(4, 0xff3333).setFillStyle(0x000000, 0).setDepth(100);
+      }
+      this.warnBorder.setVisible(true).setAlpha(1);
+      this.tweens.add({
+        targets: this.warnBorder,
+        alpha: 0,
+        duration: 800,
+        ease: 'Power2',
+      });
+    }
+
     // Check game state after a short delay
     this.time.delayedCall(wins.length > 0 ? 800 : 200, () => {
       this.afterSpin();
@@ -142,16 +164,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onSkipLevel(): void {
-    // Offer powerup for level clear, then advance
-    this.offerPowerup(() => {
-      advanceLevel(this.state);
-      recalcGridSize(this.state);
-      this.grid.build(this.state.gridRows, this.state.gridCols, 400, 270);
-      this.grid.reset();
-      this.refreshUI();
-      this.phase = 'idle';
-      this.hud.setSpinEnabled(canSpin(this.state));
-    });
+    advanceLevel(this.state);
+    recalcGridSize(this.state);
+    this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
+    this.grid.reset();
+    this.refreshUI();
+    this.phase = 'idle';
+    this.hud.setSpinEnabled(canSpin(this.state));
   }
 
   private offerPowerup(onComplete?: () => void): void {
@@ -164,7 +183,7 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         recalcGridSize(this.state);
         // Rebuild grid if size changed
-        this.grid.build(this.state.gridRows, this.state.gridCols, 400, 270);
+        this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
         this.refreshUI();
 
         // Consume free_spins powerup: add to freeSpinsRemaining
@@ -173,8 +192,8 @@ export class GameScene extends Phaser.Scene {
         if (onComplete) {
           onComplete();
         } else {
-          this.phase = 'idle';
-          this.hud.setSpinEnabled(canSpin(this.state));
+          // Delay to let PowerupScene fully close before re-checking
+          this.time.delayedCall(100, () => this.afterSpin());
         }
       },
     });

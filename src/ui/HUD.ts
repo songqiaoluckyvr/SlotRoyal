@@ -8,12 +8,13 @@ export class HUD {
   private levelText!: Phaser.GameObjects.Text;
   private targetText!: Phaser.GameObjects.Text;
   private progressBar!: Phaser.GameObjects.Rectangle;
+  private thresholdMarkers: { threshold: number; icon: Phaser.GameObjects.Text }[] = [];
   private winText!: Phaser.GameObjects.Text;
   private denomBtns: { btn: Phaser.GameObjects.Text; value: number }[] = [];
   private betText!: Phaser.GameObjects.Text;
   private selectedDenom = 1;
 
-  spinBtn!: Phaser.GameObjects.Text;
+  spinBtn!: Phaser.GameObjects.Image;
   betUpBtn!: Phaser.GameObjects.Text;
   betDownBtn!: Phaser.GameObjects.Text;
   skipBtn!: Phaser.GameObjects.Text;
@@ -36,11 +37,24 @@ export class HUD {
     }).setOrigin(1, 0);
 
     // Progress bar (under top bar)
-    this.scene.add.rectangle(W / 2, 42, W - 40, 10, 0x333333);
-    this.progressBar = this.scene.add.rectangle(20, 42, 0, 10, 0x44ff44).setOrigin(0, 0.5);
+    const barLeft = 20;
+    const barWidth = W - 40;
+    this.scene.add.rectangle(W / 2, 42, barWidth, 10, 0x333333);
+    this.progressBar = this.scene.add.rectangle(barLeft, 42, 0, 10, 0x44ff44).setOrigin(0, 0.5);
+
+    // Threshold chest markers at 25%, 50%, 75%, 100%
+    const thresholds = [0.25, 0.50, 0.75, 1.0];
+    this.thresholdMarkers = [];
+    for (const t of thresholds) {
+      const x = barLeft + barWidth * t;
+      const icon = this.scene.add.text(x, 42, '🎁', {
+        fontSize: '18px',
+      }).setOrigin(0.5).setDepth(5);
+      this.thresholdMarkers.push({ threshold: t, icon });
+    }
 
     // Bottom area
-    const bottomY = 520;
+    const bottomY = 670;
 
     this.bankrollText = this.scene.add.text(20, bottomY, '', {
       fontSize: '22px', color: '#44ff44', fontFamily: 'monospace', fontStyle: 'bold',
@@ -50,52 +64,44 @@ export class HUD {
       fontSize: '16px', color: '#aaaaaa', fontFamily: 'monospace',
     });
 
-    // Bet controls: [ - ]  Bet: $X  [ + ]   with denom selector below
-    const betY = bottomY + 5;
+    // Bet denom selector - clicking sets the bet directly
+    const betY = bottomY + 15;
     const betCenterX = W / 2;
-
-    this.betDownBtn = this.scene.add.text(betCenterX - 100, betY, '[ - ]', {
-      fontSize: '20px', color: '#ff8844', fontFamily: 'monospace',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    this.betText = this.scene.add.text(betCenterX, betY, '', {
-      fontSize: '20px', color: '#ffffff', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    this.betUpBtn = this.scene.add.text(betCenterX + 100, betY, '[ + ]', {
-      fontSize: '20px', color: '#ff8844', fontFamily: 'monospace',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    // Denom selector row
     const denoms = [1, 5, 10, 25];
-    const denomY = betY + 30;
-    const denomStartX = betCenterX - ((denoms.length - 1) * 55) / 2;
+    const denomStartX = betCenterX - ((denoms.length - 1) * 60) / 2;
+
+    this.betText = this.scene.add.text(betCenterX, betY - 28, '', {
+      fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
+    }).setOrigin(0.5);
 
     for (let i = 0; i < denoms.length; i++) {
       const value = denoms[i];
-      const btn = this.scene.add.text(denomStartX + i * 55, denomY, `$${value}`, {
-        fontSize: '14px', color: '#888888', fontFamily: 'monospace',
+      const btn = this.scene.add.text(denomStartX + i * 60, betY, `$${value}`, {
+        fontSize: '18px', color: '#888888', fontFamily: 'monospace',
         backgroundColor: '#222244',
-        padding: { x: 6, y: 2 },
+        padding: { x: 10, y: 6 },
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
       btn.on('pointerdown', () => {
         this.selectedDenom = value;
         this.updateDenomColors();
+        if (this.onBetChange) this.onBetChange(value);
       });
 
       this.denomBtns.push({ btn, value });
     }
     this.updateDenomColors();
 
-    // Spin button (right bottom)
-    this.spinBtn = this.scene.add.text(W - 100, bottomY + 10, 'SPIN', {
-      fontSize: '28px', color: '#44ff44', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    this.scene.add.text(W - 100, bottomY + 38, 'Min $1 · Max $25', {
+    this.scene.add.text(betCenterX, betY + 25, 'Min $1 · Max $25', {
       fontSize: '11px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5);
+
+    // Spin button (right bottom)
+    this.spinBtn = this.scene.add.image(W - 100, bottomY + 10, 'spin_btn')
+      .setOrigin(0.5).setInteractive({ useHandCursor: true });
+    // Scale to fit nicely
+    const btnScale = 120 / Math.max(this.spinBtn.width, this.spinBtn.height);
+    this.spinBtn.setScale(btnScale);
 
     // Skip button (hidden by default, shown when target reached)
     this.skipBtn = this.scene.add.text(W - 100, bottomY + 50, '[ SKIP → ]', {
@@ -130,18 +136,35 @@ export class HUD {
     this.bankrollText.setText(`$${state.bankroll}`);
     this.betText.setText(`Bet: $${state.currentBet}`);
     this.levelText.setText(`Level ${state.level}`);
-    this.targetText.setText(`Target: $${state.target}`);
+    this.targetText.setText(`Earn: $${state.levelEarnings} / $${state.target}`);
 
     const freeLabel = state.freeSpinsRemaining > 0 ? ` (+${state.freeSpinsRemaining} free)` : '';
     this.spinsText.setText(`Spins: ${state.spinsRemaining}/${state.spinsTotal}${freeLabel}`);
 
-    // Progress bar
-    const progress = Math.min(1, state.bankroll / state.target);
+    // Warn when spins are low
+    const totalSpins = state.spinsRemaining + state.freeSpinsRemaining;
+    if (totalSpins <= 5 && totalSpins > 0) {
+      this.spinsText.setColor('#ff4444');
+      this.spinsText.setFontStyle('bold');
+    } else {
+      this.spinsText.setColor('#aaaaaa');
+      this.spinsText.setFontStyle('');
+    }
+
+    // Progress bar based on level earnings
+    const progress = Math.min(1, state.levelEarnings / state.target);
     this.progressBar.width = Math.max(0, (W - 40) * progress);
     this.progressBar.setFillStyle(progress >= 1 ? 0x44ff44 : 0xffcc00);
 
-    // Show skip button when target reached
-    this.skipBtn.setVisible(state.bankroll >= state.target);
+    // Update threshold markers
+    for (const m of this.thresholdMarkers) {
+      const hit = state.powerupThresholdsHit.includes(m.threshold);
+      m.icon.setAlpha(hit ? 0.3 : 1);
+      m.icon.setTint(hit ? 0x666666 : 0xffffff);
+    }
+
+    // Show skip button when earnings target reached
+    this.skipBtn.setVisible(state.levelEarnings >= state.target);
   }
 
   showWin(amount: number): void {
@@ -168,7 +191,8 @@ export class HUD {
   }
 
   setSpinEnabled(enabled: boolean): void {
-    this.spinBtn.setColor(enabled ? '#44ff44' : '#666666');
+    this.spinBtn.setTint(enabled ? 0xffffff : 0x666666);
+    this.spinBtn.setAlpha(enabled ? 1 : 0.5);
     if (enabled) {
       this.spinBtn.setInteractive({ useHandCursor: true });
     } else {

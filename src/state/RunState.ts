@@ -7,6 +7,8 @@ export interface RunState {
   currentBet: number;
   level: number;
   target: number;
+  /** Total earnings (winnings) accumulated in the current level */
+  levelEarnings: number;
   spinsRemaining: number;
   spinsTotal: number;
   gridRows: number;
@@ -25,6 +27,7 @@ export function createInitialState(): RunState {
     currentBet: 1,
     level: 1,
     target: config.target,
+    levelEarnings: 0,
     spinsRemaining: config.spins,
     spinsTotal: config.spins,
     gridRows: 3,
@@ -50,6 +53,7 @@ export function placeBet(state: RunState): number {
 
 export function addWinnings(state: RunState, amount: number): void {
   state.bankroll += amount;
+  state.levelEarnings += amount;
 }
 
 export function setBet(state: RunState, bet: number): void {
@@ -62,6 +66,7 @@ export function advanceLevel(state: RunState): void {
   state.target = config.target;
   state.spinsRemaining = config.spins;
   state.spinsTotal = config.spins;
+  state.levelEarnings = 0;
   state.powerupThresholdsHit = [];
 
   // Apply extra spins from free_spins powerups carried over
@@ -75,22 +80,22 @@ export function canSpin(state: RunState): boolean {
 }
 
 export function isLevelCleared(state: RunState): boolean {
-  return state.bankroll >= state.target;
+  return state.levelEarnings >= state.target;
 }
 
 export function isRunOver(state: RunState): boolean {
   if (state.bankroll <= 0) return true;
-  if (state.spinsRemaining <= 0 && state.freeSpinsRemaining <= 0 && state.bankroll < state.target) return true;
+  if (state.spinsRemaining <= 0 && state.freeSpinsRemaining <= 0 && state.levelEarnings < state.target) return true;
   return false;
 }
 
 /** Check if a powerup threshold is newly crossed. Returns threshold % or null. */
 export function checkPowerupThreshold(state: RunState): number | null {
-  const progress = state.bankroll / state.target;
-  const thresholds = [0.25, 0.50];
+  const progress = state.levelEarnings / state.target;
+  const thresholds = [0.25, 0.50, 0.75, 1.0];
 
   for (const t of thresholds) {
-    if (progress >= t && !state.powerupThresholdsHit.includes(t)) {
+    if (progress >= t - 0.001 && !state.powerupThresholdsHit.includes(t)) {
       state.powerupThresholdsHit.push(t);
       return t;
     }
