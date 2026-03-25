@@ -15,11 +15,106 @@ export interface WinResult {
   winPositions: [number, number][];
 }
 
+/**
+ * Hardcoded payline patterns per column count.
+ * Each pattern is an array of row indices (using 0=top, R=bottom, M=middle).
+ * Patterns use placeholder values that get mapped to actual rows at runtime.
+ * 'T'=0 (top), 'B'=rows-1 (bottom), 'M'=floor(rows/2)
+ */
+/**
+ * Row position keys:
+ * T=top(0), TM=upper-mid, M=middle, MB=lower-mid, B=bottom
+ * TM/MB only resolve differently from T/M/B when rows >= 4
+ */
+type RowKey = 'T' | 'TM' | 'M' | 'MB' | 'B';
+
+/** Base patterns that work with 3 rows (T/M/B only) */
+const BASE_PATTERNS: Record<number, RowKey[][]> = {
+  3: [
+    ['T', 'M', 'B'],           // diagonal down
+    ['B', 'M', 'T'],           // diagonal up
+    ['T', 'B', 'T'],           // V-shape
+    ['B', 'T', 'B'],           // inverted V
+  ],
+  4: [
+    ['T', 'M', 'M', 'B'],     // gradual diagonal down
+    ['B', 'M', 'M', 'T'],     // gradual diagonal up
+    ['T', 'B', 'B', 'T'],     // V-shape (flat bottom)
+    ['B', 'T', 'T', 'B'],     // inverted V (flat top)
+    ['T', 'B', 'T', 'B'],     // zigzag
+    ['B', 'T', 'B', 'T'],     // zigzag inverted
+  ],
+  5: [
+    ['T', 'M', 'B', 'M', 'T'],  // V-shape
+    ['B', 'M', 'T', 'M', 'B'],  // inverted V
+    ['M', 'T', 'T', 'T', 'M'],  // inverted U
+    ['M', 'B', 'B', 'B', 'M'],  // U-shape
+    ['T', 'T', 'M', 'B', 'B'],  // diagonal down
+    ['B', 'B', 'M', 'T', 'T'],  // diagonal up
+    ['T', 'B', 'T', 'B', 'T'],  // zigzag
+    ['B', 'T', 'B', 'T', 'B'],  // zigzag inverted
+    ['M', 'T', 'M', 'B', 'M'],  // W from middle
+    ['M', 'B', 'M', 'T', 'M'],  // M from middle
+  ],
+  6: [
+    ['T', 'M', 'B', 'B', 'M', 'T'],  // V-shape
+    ['B', 'M', 'T', 'T', 'M', 'B'],  // inverted V
+    ['T', 'T', 'M', 'B', 'B', 'B'],  // gradual diagonal down
+    ['B', 'B', 'M', 'T', 'T', 'T'],  // gradual diagonal up
+    ['T', 'B', 'T', 'B', 'T', 'B'],  // zigzag
+    ['B', 'T', 'B', 'T', 'B', 'T'],  // zigzag inverted
+    ['M', 'T', 'T', 'T', 'T', 'M'],  // wide inverted U
+    ['M', 'B', 'B', 'B', 'B', 'M'],  // wide U
+  ],
+};
+
+/** Extra patterns unlocked when rows >= 4 (uses TM/MB positions) */
+const EXTRA_ROW_PATTERNS: Record<number, RowKey[][]> = {
+  3: [
+    ['T', 'TM', 'M'],             // shallow diagonal down
+    ['B', 'MB', 'M'],             // shallow diagonal up
+    ['TM', 'B', 'TM'],            // shallow V
+    ['MB', 'T', 'MB'],            // shallow inverted V
+  ],
+  4: [
+    ['TM', 'B', 'B', 'TM'],       // shallow V
+    ['MB', 'T', 'T', 'MB'],       // shallow inverted V
+    ['T', 'TM', 'MB', 'B'],       // smooth diagonal down
+    ['B', 'MB', 'TM', 'T'],       // smooth diagonal up
+  ],
+  5: [
+    ['TM', 'M', 'B', 'M', 'TM'],  // shallow V
+    ['MB', 'M', 'T', 'M', 'MB'],  // shallow inverted V
+    ['T', 'TM', 'M', 'MB', 'B'],  // smooth diagonal down
+    ['B', 'MB', 'M', 'TM', 'T'],  // smooth diagonal up
+    ['TM', 'T', 'TM', 'B', 'MB'], // W from upper-mid
+    ['MB', 'B', 'MB', 'T', 'TM'], // M from lower-mid
+  ],
+  6: [
+    ['TM', 'M', 'B', 'B', 'M', 'TM'],  // shallow V
+    ['MB', 'M', 'T', 'T', 'M', 'MB'],  // shallow inverted V
+    ['T', 'TM', 'M', 'M', 'MB', 'B'],  // smooth diagonal down
+    ['B', 'MB', 'M', 'M', 'TM', 'T'],  // smooth diagonal up
+  ],
+};
+
+function resolveRow(key: RowKey, rows: number): number {
+  const B = rows - 1;
+  const M = Math.floor(rows / 2);
+  switch (key) {
+    case 'T': return 0;
+    case 'TM': return Math.max(1, Math.floor(M / 2));
+    case 'M': return M;
+    case 'MB': return Math.min(B - 1, M + Math.floor((B - M) / 2));
+    case 'B': return B;
+  }
+}
+
 /** Generate paylines for a given grid size */
 export function generatePaylines(rows: number, cols: number): Payline[] {
   const paylines: Payline[] = [];
 
-  // Horizontal paylines: one per row
+  // Horizontal paylines: one per row (always active)
   for (let r = 0; r < rows; r++) {
     const positions: [number, number][] = [];
     for (let c = 0; c < cols; c++) {
@@ -28,23 +123,26 @@ export function generatePaylines(rows: number, cols: number): Payline[] {
     paylines.push({ positions });
   }
 
-  // Diagonals: only when grid is at least 3×3
+  // Pattern-based paylines (require at least 3 rows and 3 cols)
   if (rows >= 3 && cols >= 3) {
-    const diagLen = Math.min(rows, cols);
-
-    // Top-left to bottom-right
-    const diag1: [number, number][] = [];
-    for (let i = 0; i < diagLen; i++) {
-      diag1.push([i, i]);
+    const base = BASE_PATTERNS[cols] ?? [];
+    for (const pattern of base) {
+      const positions: [number, number][] = pattern.map(
+        (key, c) => [resolveRow(key, rows), c]
+      );
+      paylines.push({ positions });
     }
-    paylines.push({ positions: diag1 });
 
-    // Top-right to bottom-left
-    const diag2: [number, number][] = [];
-    for (let i = 0; i < diagLen; i++) {
-      diag2.push([i, cols - 1 - i]);
+    // Extra patterns when 4+ rows (TM/MB become distinct positions)
+    if (rows >= 4) {
+      const extra = EXTRA_ROW_PATTERNS[cols] ?? [];
+      for (const pattern of extra) {
+        const positions: [number, number][] = pattern.map(
+          (key, c) => [resolveRow(key, rows), c]
+        );
+        paylines.push({ positions });
+      }
     }
-    paylines.push({ positions: diag2 });
   }
 
   return paylines;

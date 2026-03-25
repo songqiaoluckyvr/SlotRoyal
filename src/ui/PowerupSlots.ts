@@ -3,7 +3,7 @@ import type { Powerup } from '../state/PowerupDefs';
 
 const SLOT_SIZE = 40;
 const SLOT_GAP = 8;
-const MAX_SLOTS = 5;
+const MAX_SLOTS = 3;
 
 export class PowerupSlots {
   private container: Phaser.GameObjects.Container;

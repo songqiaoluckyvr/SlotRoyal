@@ -90,7 +90,7 @@ export class PowerupScene extends Phaser.Scene {
     }
 
     // If slots available, just add
-    if (state.activePowerups.length < 5) {
+    if (state.activePowerups.length < 3) {
       state.activePowerups.push(powerup);
       this.closeScene();
       return;

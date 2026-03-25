@@ -53,6 +53,16 @@ export class GameScene extends Phaser.Scene {
     this.powerupSlots = new PowerupSlots(this, 15, 120);
     this.refreshUI();
 
+    // Info button (top-right area, below target text)
+    const infoBtn = this.add.text(this.cameras.main.width - 20, 56, '[ ? ]', {
+      fontSize: '18px', color: '#aaaaff', fontFamily: 'monospace',
+      backgroundColor: '#222244', padding: { x: 8, y: 4 },
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(10);
+
+    infoBtn.on('pointerover', () => infoBtn.setColor('#ffffff'));
+    infoBtn.on('pointerout', () => infoBtn.setColor('#aaaaff'));
+    infoBtn.on('pointerdown', () => this.openInfo());
+
     // Wire buttons
     this.hud.spinBtn.on('pointerdown', () => this.onSpin());
     this.hud.onBetChange = (bet: number) => {
@@ -173,7 +183,22 @@ export class GameScene extends Phaser.Scene {
     this.hud.setSpinEnabled(canSpin(this.state));
   }
 
+  private openInfo(): void {
+    if (this.phase !== 'idle') return;
+    this.phase = 'powerup'; // reuse powerup phase to block input
+
+    this.scene.launch('Info', {
+      gridRows: this.state.gridRows,
+      gridCols: this.state.gridCols,
+      onClose: () => {
+        this.phase = 'idle';
+        this.hud.setSpinEnabled(canSpin(this.state));
+      },
+    });
+  }
+
   private offerPowerup(onComplete?: () => void): void {
+    if (this.phase === 'powerup') return; // prevent double-launch
     this.phase = 'powerup';
     const options = this.generatePowerupOptions(3);
 
@@ -192,8 +217,10 @@ export class GameScene extends Phaser.Scene {
         if (onComplete) {
           onComplete();
         } else {
+          // Reset phase so afterSpin can launch another powerup if needed
+          this.phase = 'idle';
           // Delay to let PowerupScene fully close before re-checking
-          this.time.delayedCall(100, () => this.afterSpin());
+          this.time.delayedCall(200, () => this.afterSpin());
         }
       },
     });
@@ -221,10 +248,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private generatePowerupOptions(count: number): Powerup[] {
-    const types: PowerupType[] = [
+    const allTypes: PowerupType[] = [
       'free_spins', 'extra_row', 'extra_column',
       'symbol_value_up', 'symbol_chance_up', 'red_pocket',
     ];
+
+    // Filter out maxed options
+    const types = allTypes.filter(t => {
+      if (t === 'extra_row' && this.state.gridRows >= 6) return false;
+      if (t === 'extra_column' && this.state.gridCols >= 6) return false;
+      return true;
+    });
     const options: Powerup[] = [];
     const usedTypes = new Set<string>();
 
