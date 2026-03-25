@@ -28,9 +28,7 @@ const def: PowerupDef = {
 
   hooks: {
     getPayoutModifier: (state, powerup, _symbolId) => {
-      // Check if player is betting at current max
-      const maxBet = 25; // will be overridden by registry.collectMaxBet if bet_multiplier active
-      if (state.currentBet >= maxBet) {
+      if (state.currentBet >= state.runtime.effectiveMaxBet) {
         return powerup.value;
       }
       return 0;

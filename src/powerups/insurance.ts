@@ -33,7 +33,6 @@ const def: PowerupDef = {
     onAfterSpin: (state, powerup, totalWin, bet) => {
       if (totalWin === 0 && bet > 0 && powerup.value > 0) {
         powerup.value -= 1;
-        powerup.level = powerup.value;
         const refund = Math.ceil(bet * 50 / 100);
         state.bankroll += refund;
         state.levelEarnings += refund;

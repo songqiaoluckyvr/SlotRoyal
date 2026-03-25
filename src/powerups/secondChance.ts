@@ -36,7 +36,6 @@ const def: PowerupDef = {
       // Only trigger once per spin on a loss, if charges remain
       if (totalWin === 0 && !state.runtime.secondChanceTriggered && powerup.value > 0) {
         powerup.value--;
-        powerup.level = powerup.value;
         state.runtime.secondChanceTriggered = true;
         // Refund the spin so it doesn't count
         state.spinsRemaining++;

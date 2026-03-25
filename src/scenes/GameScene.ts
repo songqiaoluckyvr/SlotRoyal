@@ -94,6 +94,9 @@ export class GameScene extends Phaser.Scene {
     this.refreshUI();
     this.grid.reset();
 
+    // Update effective max bet for hooks to read
+    this.state.runtime.effectiveMaxBet = registry.collectMaxBet(this.state, this.state.activePowerups);
+
     // Hook: before spin
     registry.runBeforeSpin(this.state, this.state.activePowerups, betAmount);
 
@@ -101,12 +104,12 @@ export class GameScene extends Phaser.Scene {
     const overrides = registry.collectWeightModifiers(this.state, this.state.activePowerups);
     const result = spin(this.state.gridRows, this.state.gridCols, overrides);
 
+    // Capture sticky positions BEFORE grid hooks (new wilds from this spin should still animate)
+    const preStickyEntries = (this.state.runtime.stickyWildEntries || []).filter(e => e.turns > 0);
+    const stickySet = new Set<string>(preStickyEntries.map(e => `${e.r},${e.c}`));
+
     // Hook: grid generated (symbol transform, sticky wilds, etc.)
     registry.runGridGenerated(this.state, this.state.activePowerups, result);
-
-    // Build set of cells to animate — exclude sticky wild positions (they stay in place)
-    const stickyEntries = this.state.runtime.stickyWildEntries || [];
-    const stickySet = new Set<string>(stickyEntries.map(e => `${e.r},${e.c}`));
     let spinCells: Set<string> | undefined;
     if (stickySet.size > 0) {
       spinCells = new Set<string>();

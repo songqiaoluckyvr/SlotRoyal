@@ -14,6 +14,8 @@ export interface PowerupRuntimeState {
   cascadesRemaining: number;
   /** Set to true by Second Chance hook when a free re-spin should trigger */
   secondChanceTriggered: boolean;
+  /** Current effective max bet (updated by GameScene before each spin) */
+  effectiveMaxBet: number;
 }
 
 export function createRuntimeState(): PowerupRuntimeState {
@@ -26,6 +28,7 @@ export function createRuntimeState(): PowerupRuntimeState {
     secondChanceUsedThisLevel: 0,
     cascadesRemaining: 0,
     secondChanceTriggered: false,
+    effectiveMaxBet: 25,
   };
 }
 
