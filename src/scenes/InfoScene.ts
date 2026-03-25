@@ -12,7 +12,6 @@ type Tab = 'payouts' | 'paylines' | 'powerups';
 
 export class InfoScene extends Phaser.Scene {
   private sceneData!: InfoSceneData;
-  private activeTab: Tab = 'payouts';
   private tabContainer!: Phaser.GameObjects.Container;
   private contentContainer!: Phaser.GameObjects.Container;
   private tabBtns: { btn: Phaser.GameObjects.Text; tab: Tab }[] = [];
@@ -73,7 +72,7 @@ export class InfoScene extends Phaser.Scene {
   }
 
   private switchTab(tab: Tab): void {
-    this.activeTab = tab;
+    // tab tracked for styling
     this.contentContainer.removeAll(true);
 
     // Update tab styles
@@ -251,12 +250,12 @@ export class InfoScene extends Phaser.Scene {
     let y = 0;
 
     const powerups = [
-      { name: 'Free Spins', desc: 'Grants extra spins at no cost.', color: 0x44ff44, type: 'Consumable' },
+      { name: 'Free Spins', desc: 'Grants extra spins at no cost. Applied instantly, no slot needed.', color: 0x44ff44, type: 'Instant' },
       { name: 'Extra Row', desc: 'Adds a row to the grid, unlocking more paylines.', color: 0xff8844, type: 'Persistent' },
       { name: 'Extra Column', desc: 'Adds a column, enabling longer symbol matches.', color: 0x44aaff, type: 'Persistent' },
-      { name: 'Symbol Value Up', desc: 'Boosts payout multiplier for one symbol type.', color: 0xffcc00, type: 'Persistent' },
-      { name: 'Symbol Chance Up', desc: 'Increases appearance rate for one symbol type.', color: 0xcc44ff, type: 'Persistent' },
-      { name: 'Red Pocket', desc: 'Instant random cash reward scaled by level.', color: 0xff2222, type: 'Consumable' },
+      { name: 'Rarity Value Up', desc: 'Boosts payout multiplier for an entire rarity tier (Common/Uncommon/Rare).', color: 0xffcc00, type: 'Persistent' },
+      { name: 'Rarity Chance Up', desc: 'Increases appearance rate for an entire rarity tier.', color: 0xcc44ff, type: 'Persistent' },
+      { name: 'Red Pocket', desc: 'Instant random cash reward scaled by level. No slot needed.', color: 0xff2222, type: 'Instant' },
     ];
 
     for (const pu of powerups) {
@@ -272,7 +271,7 @@ export class InfoScene extends Phaser.Scene {
       this.contentContainer.add(nameText);
 
       // Type badge
-      const typeColor = pu.type === 'Consumable' ? '#ff8844' : '#44aaff';
+      const typeColor = pu.type === 'Instant' ? '#ff8844' : '#44aaff';
       this.contentContainer.add(this.add.text(58 + nameText.width + 10, y + 6, `[${pu.type}]`, {
         fontSize: '11px', color: typeColor, fontFamily: 'monospace',
       }));
@@ -295,8 +294,8 @@ export class InfoScene extends Phaser.Scene {
     const notes = [
       'Powerups are offered at 25%, 50%, 75%, and 100% of the earnings target.',
       'Max 3 active slots. Same-type powerups merge to increase level.',
-      'Persistent powerups carry over between levels.',
-      'Consumable powerups are applied immediately when picked.',
+      'Passive powerups carry over between levels and occupy a slot.',
+      'Instant powerups apply immediately and don\'t take a slot.',
     ];
 
     for (const note of notes) {

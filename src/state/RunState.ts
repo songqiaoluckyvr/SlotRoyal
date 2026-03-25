@@ -1,6 +1,7 @@
 import { getLevelConfig } from '../core/LevelConfig';
 import type { Powerup } from './PowerupDefs';
 import type { SymbolWeightOverride } from '../core/SlotEngine';
+import { getSymbolById, getSymbolRarity, getSymbolsByRarity } from '../core/SymbolTable';
 
 export interface RunState {
   bankroll: number;
@@ -103,22 +104,27 @@ export function checkPowerupThreshold(state: RunState): number | null {
   return null;
 }
 
-/** Get symbol weight overrides from active powerups */
+/** Get symbol weight overrides from active powerups (rarity-based) */
 export function getWeightOverrides(state: RunState): SymbolWeightOverride[] {
   const overrides: SymbolWeightOverride[] = [];
   for (const p of state.activePowerups) {
-    if (p.type === 'symbol_chance_up' && p.targetSymbolId) {
-      overrides.push({ symbolId: p.targetSymbolId, additionalWeight: p.value });
+    if (p.type === 'symbol_chance_up' && p.targetRarity) {
+      const symbols = getSymbolsByRarity(p.targetRarity);
+      for (const sym of symbols) {
+        overrides.push({ symbolId: sym.id, additionalWeight: p.value });
+      }
     }
   }
   return overrides;
 }
 
-/** Get payout multiplier bonus for a symbol from active powerups */
+/** Get payout multiplier bonus for a symbol from active powerups (rarity-based) */
 export function getPayoutBonus(state: RunState, symbolId: string): number {
+  const sym = getSymbolById(symbolId);
+  const rarity = getSymbolRarity(sym);
   let bonus = 0;
   for (const p of state.activePowerups) {
-    if (p.type === 'symbol_value_up' && p.targetSymbolId === symbolId) {
+    if (p.type === 'symbol_value_up' && p.targetRarity === rarity) {
       bonus += p.value;
     }
   }

@@ -68,6 +68,14 @@ export class PowerupScene extends Phaser.Scene {
       wordWrap: { width: width - 20 }, align: 'center',
     }).setOrigin(0.5).setDepth(1);
 
+    // Instant/Persistent badge
+    const badge = powerup.consumable ? 'INSTANT' : 'PASSIVE';
+    const badgeColor = powerup.consumable ? '#ff8844' : '#44aaff';
+    this.add.text(x, y + 20, badge, {
+      fontSize: '11px', color: badgeColor, fontFamily: 'monospace',
+      backgroundColor: '#1a1a2e', padding: { x: 6, y: 2 },
+    }).setOrigin(0.5).setDepth(1);
+
     // Pick button
     const btn = this.add.text(x, y + 50, '[ PICK ]', {
       fontSize: '18px', color: '#44ff44', fontFamily: 'monospace',
@@ -80,6 +88,13 @@ export class PowerupScene extends Phaser.Scene {
 
   private pickPowerup(powerup: Powerup): void {
     const state = this.sceneData.state;
+
+    // Consumables apply immediately — don't occupy a slot
+    if (powerup.consumable) {
+      this.applyConsumable(powerup);
+      this.closeScene();
+      return;
+    }
 
     // Try to merge with existing
     const mergeTarget = state.activePowerups.find(p => canMerge(p, powerup));
@@ -98,6 +113,18 @@ export class PowerupScene extends Phaser.Scene {
 
     // Slots full — show swap UI
     this.showSwapUI(powerup);
+  }
+
+  private applyConsumable(powerup: Powerup): void {
+    const state = this.sceneData.state;
+    if (powerup.type === 'free_spins') {
+      state.freeSpinsRemaining += powerup.value;
+    }
+    if (powerup.type === 'red_pocket') {
+      const reward = Phaser.Math.Between(10, 50) * state.level;
+      state.bankroll += reward;
+      state.levelEarnings += reward;
+    }
   }
 
   private showSwapUI(newPowerup: Powerup): void {

@@ -6,13 +6,29 @@ export type PowerupType =
   | 'symbol_chance_up'
   | 'red_pocket';
 
+export type Rarity = 'common' | 'uncommon' | 'rare';
+
+export const RARITY_LABELS: Record<Rarity, string> = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+};
+
+export const RARITY_COLORS: Record<Rarity, number> = {
+  common: 0x888888,
+  uncommon: 0x44aaff,
+  rare: 0xff8844,
+};
+
 export interface Powerup {
   id: string;
   type: PowerupType;
   name: string;
   description: string;
   color: number;
-  /** For symbol-specific powerups */
+  /** For rarity-based powerups */
+  targetRarity?: Rarity;
+  /** Legacy — kept for compatibility */
   targetSymbolId?: string;
   /** Numeric value (e.g., free spin count, payout multiplier bonus, weight bonus) */
   value: number;
@@ -22,7 +38,7 @@ export interface Powerup {
   level: number;
 }
 
-export function createPowerup(type: PowerupType, targetSymbolId?: string): Powerup {
+export function createPowerup(type: PowerupType, targetRarity?: Rarity): Powerup {
   switch (type) {
     case 'free_spins':
       return {
@@ -42,18 +58,22 @@ export function createPowerup(type: PowerupType, targetSymbolId?: string): Power
         description: '+1 column (longer matches)', color: 0x44aaff,
         value: 1, consumable: false, level: 1,
       };
-    case 'symbol_value_up':
+    case 'symbol_value_up': {
+      const label = targetRarity ? RARITY_LABELS[targetRarity] : '?';
       return {
-        id: `${type}_${Date.now()}`, type, name: 'Value Up',
-        description: `+2x payout for symbol`, color: 0xffcc00,
-        targetSymbolId, value: 2, consumable: false, level: 1,
+        id: `${type}_${targetRarity}_${Date.now()}`, type, name: `${label} Value Up`,
+        description: `+2x payout for ${label} symbols`, color: 0xffcc00,
+        targetRarity, value: 2, consumable: false, level: 1,
       };
-    case 'symbol_chance_up':
+    }
+    case 'symbol_chance_up': {
+      const label = targetRarity ? RARITY_LABELS[targetRarity] : '?';
       return {
-        id: `${type}_${Date.now()}`, type, name: 'Chance Up',
-        description: `+5 weight for symbol`, color: 0xcc44ff,
-        targetSymbolId, value: 5, consumable: false, level: 1,
+        id: `${type}_${targetRarity}_${Date.now()}`, type, name: `${label} Chance Up`,
+        description: `+5 weight for ${label} symbols`, color: 0xcc44ff,
+        targetRarity, value: 5, consumable: false, level: 1,
       };
+    }
     case 'red_pocket':
       return {
         id: `${type}_${Date.now()}`, type, name: 'Red Pocket',
@@ -63,10 +83,10 @@ export function createPowerup(type: PowerupType, targetSymbolId?: string): Power
   }
 }
 
-/** Check if two powerups can merge (same type + same target if applicable) */
+/** Check if two powerups can merge (same type + same rarity if applicable) */
 export function canMerge(a: Powerup, b: Powerup): boolean {
   if (a.type !== b.type) return false;
-  if (a.targetSymbolId && a.targetSymbolId !== b.targetSymbolId) return false;
+  if (a.targetRarity && a.targetRarity !== b.targetRarity) return false;
   return true;
 }
 

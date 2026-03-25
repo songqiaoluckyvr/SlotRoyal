@@ -15,11 +15,12 @@ export const SYMBOLS: readonly SymbolDef[] = [
     weight: 25, isWild: false,
     payouts: { 3: 2, 4: 5, 5: 10, 6: 20 },
   },
-  {
-    id: 'teal', name: 'Teal Blubo', label: 'TEL', color: 0x44ccaa,
-    weight: 25, isWild: false,
-    payouts: { 3: 2, 4: 5, 5: 10, 6: 20 },
-  },
+  // teal disabled — keeping 8 symbols for better hit rate on 3x3
+  // {
+  //   id: 'teal', name: 'Teal Blubo', label: 'TEL', color: 0x44ccaa,
+  //   weight: 25, isWild: false,
+  //   payouts: { 3: 2, 4: 5, 5: 10, 6: 20 },
+  // },
   {
     id: 'pink', name: 'Pink Blubo', label: 'PNK', color: 0xff66aa,
     weight: 22, isWild: false,
@@ -58,6 +59,21 @@ export const SYMBOLS: readonly SymbolDef[] = [
     payouts: { 3: 50, 4: 150, 5: 500, 6: 1000 },
   },
 ];
+
+import type { Rarity } from '../state/PowerupDefs';
+
+/** Get the rarity tier for a symbol based on its weight */
+export function getSymbolRarity(sym: SymbolDef): Rarity | null {
+  if (sym.isWild) return null;
+  if (sym.weight >= 22) return 'common';
+  if (sym.weight >= 10) return 'uncommon';
+  return 'rare';
+}
+
+/** Get all symbols matching a rarity tier */
+export function getSymbolsByRarity(rarity: Rarity): SymbolDef[] {
+  return SYMBOLS.filter(s => getSymbolRarity(s) === rarity);
+}
 
 export function getSymbolById(id: string): SymbolDef {
   const sym = SYMBOLS.find(s => s.id === id);

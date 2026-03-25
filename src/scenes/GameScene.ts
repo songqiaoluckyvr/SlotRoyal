@@ -16,8 +16,8 @@ import {
   recalcGridSize,
   type RunState,
 } from '../state/RunState';
-import { createPowerup, type Powerup, type PowerupType } from '../state/PowerupDefs';
-import { SYMBOLS } from '../core/SymbolTable';
+import { createPowerup, type Powerup, type PowerupType, type Rarity } from '../state/PowerupDefs';
+// SYMBOLS import removed — rarity-based powerups don't need individual symbol lookup
 import { SlotGrid } from '../ui/SlotGrid';
 import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
@@ -91,55 +91,57 @@ export class GameScene extends Phaser.Scene {
 
     const bet = placeBet(this.state);
     this.refreshUI();
+    this.grid.reset();
 
     // Generate result
     const overrides = getWeightOverrides(this.state);
     const result = spin(this.state.gridRows, this.state.gridCols, overrides);
+    const betAmount = bet > 0 ? bet : this.state.currentBet;
 
-    // Display result (instant for MVP — animation in Phase 2)
-    this.grid.setGrid(result);
+    // Animate spin and reveal result
+    this.grid.spinAndReveal(result, () => {
+      // Evaluate paylines after animation completes
+      const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
+      const wins = evaluatePaylines(result, paylines, betAmount);
 
-    // Evaluate paylines
-    const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
-    const wins = evaluatePaylines(result, paylines, bet > 0 ? bet : this.state.currentBet);
-
-    // Apply payout bonuses from powerups
-    let totalWin = 0;
-    for (const win of wins) {
-      const bonus = getPayoutBonus(this.state, win.symbol.id);
-      const boostedAmount = win.winAmount + (bonus * bet);
-      totalWin += boostedAmount;
-      this.grid.highlightWin(win.winPositions);
-    }
-
-    if (totalWin > 0) {
-      addWinnings(this.state, totalWin);
-      this.hud.showWin(totalWin);
-    }
-
-    this.refreshUI();
-
-    // Red border warning when spins are low
-    const totalSpins = this.state.spinsRemaining + this.state.freeSpinsRemaining;
-    if (totalSpins <= 5 && totalSpins > 0) {
-      if (!this.warnBorder) {
-        const W = this.cameras.main.width;
-        const H = this.cameras.main.height;
-        this.warnBorder = this.add.rectangle(W / 2, H / 2, W, H)
-          .setStrokeStyle(4, 0xff3333).setFillStyle(0x000000, 0).setDepth(100);
+      // Apply payout bonuses from powerups
+      let totalWin = 0;
+      for (const win of wins) {
+        const bonus = getPayoutBonus(this.state, win.symbol.id);
+        const boostedAmount = win.winAmount + (bonus * bet);
+        totalWin += boostedAmount;
+        this.grid.highlightWin(win.winPositions);
       }
-      this.warnBorder.setVisible(true).setAlpha(1);
-      this.tweens.add({
-        targets: this.warnBorder,
-        alpha: 0,
-        duration: 800,
-        ease: 'Power2',
-      });
-    }
 
-    // Check game state after a short delay
-    this.time.delayedCall(wins.length > 0 ? 800 : 200, () => {
-      this.afterSpin();
+      if (totalWin > 0) {
+        addWinnings(this.state, totalWin);
+        this.hud.showWin(totalWin);
+      }
+
+      this.refreshUI();
+
+      // Red border warning when spins are low
+      const totalSpins = this.state.spinsRemaining + this.state.freeSpinsRemaining;
+      if (totalSpins <= 5 && totalSpins > 0) {
+        if (!this.warnBorder) {
+          const W = this.cameras.main.width;
+          const H = this.cameras.main.height;
+          this.warnBorder = this.add.rectangle(W / 2, H / 2, W, H)
+            .setStrokeStyle(4, 0xff3333).setFillStyle(0x000000, 0).setDepth(100);
+        }
+        this.warnBorder.setVisible(true).setAlpha(1);
+        this.tweens.add({
+          targets: this.warnBorder,
+          alpha: 0,
+          duration: 800,
+          ease: 'Power2',
+        });
+      }
+
+      // Check game state after a short delay for win highlights
+      this.time.delayedCall(wins.length > 0 ? 800 : 200, () => {
+        this.afterSpin();
+      });
     });
   }
 
@@ -211,9 +213,6 @@ export class GameScene extends Phaser.Scene {
         this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
         this.refreshUI();
 
-        // Consume free_spins powerup: add to freeSpinsRemaining
-        this.applyConsumablePowerups();
-
         if (onComplete) {
           onComplete();
         } else {
@@ -226,26 +225,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private applyConsumablePowerups(): void {
-    const toRemove: number[] = [];
-    for (let i = 0; i < this.state.activePowerups.length; i++) {
-      const p = this.state.activePowerups[i];
-      if (p.type === 'free_spins') {
-        this.state.freeSpinsRemaining += p.value;
-        toRemove.push(i);
-      }
-      if (p.type === 'red_pocket') {
-        const reward = rng.int(10, 50) * this.state.level;
-        addWinnings(this.state, reward);
-        this.hud.showWin(reward);
-        toRemove.push(i);
-      }
-    }
-    // Remove consumed powerups (reverse order to preserve indices)
-    for (const i of toRemove.reverse()) {
-      this.state.activePowerups.splice(i, 1);
-    }
-  }
 
   private generatePowerupOptions(count: number): Powerup[] {
     const allTypes: PowerupType[] = [
@@ -270,13 +249,13 @@ export class GameScene extends Phaser.Scene {
       if (usedTypes.has(key) && options.length < types.length) continue;
       usedTypes.add(key);
 
-      let targetSymbol: string | undefined;
+      let targetRarity: Rarity | undefined;
       if (type === 'symbol_value_up' || type === 'symbol_chance_up') {
-        const nonWild = SYMBOLS.filter(s => !s.isWild);
-        targetSymbol = rng.pick(nonWild).id;
+        const rarities: Rarity[] = ['common', 'uncommon', 'rare'];
+        targetRarity = rng.pick(rarities);
       }
 
-      const p = createPowerup(type, targetSymbol);
+      const p = createPowerup(type, targetRarity);
 
       // Scale values with level
       if (type === 'free_spins') {
@@ -285,10 +264,6 @@ export class GameScene extends Phaser.Scene {
       }
       if (type === 'red_pocket') {
         p.description = `$${10 * this.state.level}–$${50 * this.state.level} cash`;
-      }
-      if (targetSymbol) {
-        const sym = SYMBOLS.find(s => s.id === targetSymbol);
-        p.description = `${p.description} (${sym?.name})`;
       }
 
       options.push(p);
