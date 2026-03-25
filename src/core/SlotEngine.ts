@@ -33,3 +33,18 @@ export function spin(
 
   return grid;
 }
+
+/** Re-roll a single cell with optional weight overrides */
+export function spinSingleCell(
+  weightOverrides: SymbolWeightOverride[] = [],
+): SymbolDef {
+  const symbols = SYMBOLS;
+  const weights = symbols.map(s => {
+    let w = s.weight;
+    for (const ov of weightOverrides) {
+      if (ov.symbolId === s.id) w += ov.additionalWeight;
+    }
+    return Math.max(0, w);
+  });
+  return rng.weightedPick(symbols, weights);
+}

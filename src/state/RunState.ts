@@ -1,22 +1,11 @@
 import { getLevelConfig } from '../core/LevelConfig';
-import type { Powerup } from './PowerupDefs';
-import type { SymbolWeightOverride } from '../core/SlotEngine';
-import { getSymbolById, getSymbolRarity, getSymbolsByRarity } from '../core/SymbolTable';
+import type { PowerupInstance, RunStateRef } from '../powerups/types';
+import { createRuntimeState } from '../powerups/types';
+import { registry } from '../powerups/PowerupRegistry';
 
-export interface RunState {
-  bankroll: number;
-  currentBet: number;
-  level: number;
-  target: number;
-  /** Total earnings (winnings) accumulated in the current level */
-  levelEarnings: number;
-  spinsRemaining: number;
-  spinsTotal: number;
-  gridRows: number;
-  gridCols: number;
-  activePowerups: Powerup[];
-  freeSpinsRemaining: number;
-  /** Tracks which % thresholds have triggered powerup offers (25, 50) */
+export interface RunState extends RunStateRef {
+  activePowerups: PowerupInstance[];
+  /** Tracks which % thresholds have triggered powerup offers */
   powerupThresholdsHit: number[];
   runActive: boolean;
 }
@@ -37,13 +26,13 @@ export function createInitialState(): RunState {
     freeSpinsRemaining: 0,
     powerupThresholdsHit: [],
     runActive: true,
+    runtime: createRuntimeState(),
   };
 }
 
 export function placeBet(state: RunState): number {
   if (state.freeSpinsRemaining > 0) {
     state.freeSpinsRemaining--;
-    // Free spin doesn't cost money or use a regular spin
     return 0;
   }
   const bet = state.currentBet;
@@ -57,8 +46,9 @@ export function addWinnings(state: RunState, amount: number): void {
   state.levelEarnings += amount;
 }
 
-export function setBet(state: RunState, bet: number): void {
-  state.currentBet = Math.max(1, Math.min(25, bet, state.bankroll));
+export function setBet(state: RunState, bet: number, maxBet?: number): void {
+  const max = maxBet ?? 25;
+  state.currentBet = Math.max(1, Math.min(max, bet, state.bankroll));
 }
 
 export function advanceLevel(state: RunState): void {
@@ -70,8 +60,8 @@ export function advanceLevel(state: RunState): void {
   state.levelEarnings = 0;
   state.powerupThresholdsHit = [];
 
-  // Apply extra spins from free_spins powerups carried over
-  // (free spins are consumed during use, not on level advance)
+  // Run onLevelStart hooks
+  registry.runLevelStart(state, state.activePowerups);
 }
 
 export function canSpin(state: RunState): boolean {
@@ -90,7 +80,6 @@ export function isRunOver(state: RunState): boolean {
   return false;
 }
 
-/** Check if a powerup threshold is newly crossed. Returns threshold % or null. */
 export function checkPowerupThreshold(state: RunState): number | null {
   const progress = state.levelEarnings / state.target;
   const thresholds = [0.25, 0.50, 0.75, 1.0];
@@ -104,33 +93,6 @@ export function checkPowerupThreshold(state: RunState): number | null {
   return null;
 }
 
-/** Get symbol weight overrides from active powerups (rarity-based) */
-export function getWeightOverrides(state: RunState): SymbolWeightOverride[] {
-  const overrides: SymbolWeightOverride[] = [];
-  for (const p of state.activePowerups) {
-    if (p.type === 'symbol_chance_up' && p.targetRarity) {
-      const symbols = getSymbolsByRarity(p.targetRarity);
-      for (const sym of symbols) {
-        overrides.push({ symbolId: sym.id, additionalWeight: p.value });
-      }
-    }
-  }
-  return overrides;
-}
-
-/** Get payout multiplier bonus for a symbol from active powerups (rarity-based) */
-export function getPayoutBonus(state: RunState, symbolId: string): number {
-  const sym = getSymbolById(symbolId);
-  const rarity = getSymbolRarity(sym);
-  let bonus = 0;
-  for (const p of state.activePowerups) {
-    if (p.type === 'symbol_value_up' && p.targetRarity === rarity) {
-      bonus += p.value;
-    }
-  }
-  return bonus;
-}
-
 /** Recalculate grid size from base + powerups */
 export function recalcGridSize(state: RunState): void {
   let rows = 3;
@@ -139,6 +101,6 @@ export function recalcGridSize(state: RunState): void {
     if (p.type === 'extra_row') rows += p.value;
     if (p.type === 'extra_column') cols += p.value;
   }
-  state.gridRows = Math.min(rows, 6); // cap at 6
+  state.gridRows = Math.min(rows, 6);
   state.gridCols = Math.min(cols, 6);
 }

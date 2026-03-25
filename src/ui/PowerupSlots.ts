@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Powerup } from '../state/PowerupDefs';
+import type { PowerupInstance } from '../powerups/types';
 
 const SLOT_SIZE = 40;
 const SLOT_GAP = 8;
@@ -55,7 +55,7 @@ export class PowerupSlots {
     }
   }
 
-  update(powerups: Powerup[]): void {
+  update(powerups: PowerupInstance[]): void {
     for (let i = 0; i < MAX_SLOTS; i++) {
       const slot = this.slots[i];
       if (i < powerups.length) {

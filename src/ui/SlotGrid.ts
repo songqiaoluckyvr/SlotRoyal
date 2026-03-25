@@ -122,17 +122,59 @@ export class SlotGrid {
     }
   }
 
-  /**
-   * Animate a spin: cycle random symbols, then stop columns left-to-right
-   * showing the final result grid. Calls onComplete when all columns have stopped.
-   */
-  spinAndReveal(finalGrid: SymbolDef[][], onComplete: () => void): void {
-    const nonWild = SYMBOLS.filter(s => !s.isWild);
-    let stoppedCols = 0;
+  /** Pre-set specific cells to their final symbols immediately (no animation) */
+  setPartialGrid(grid: SymbolDef[][], cells: Set<string>): void {
+    for (const key of cells) {
+      const [r, c] = key.split(',').map(Number);
+      if (r < this.activeRows && c < this.activeCols) {
+        const cell = this.cells[r][c];
+        const sym = grid[r][c];
+        cell.sprite.setTexture(sym.id).setDisplaySize(SPRITE_SIZE, SPRITE_SIZE);
+        cell.sprite.setAlpha(1);
+        cell.sprite.y = cell.baseY;
+        cell.bg.y = cell.baseY;
+        cell.bg.setFillStyle(sym.color, 0.15);
+        cell.bg.setStrokeStyle(2, sym.color);
+      }
+    }
+  }
 
-    // Reset all active cells to spinning state with blur
+  /**
+   * Spin and reveal the grid. If onlyCells is provided, only those cells animate;
+   * the rest stay in place showing their current symbol.
+   */
+  spinAndReveal(finalGrid: SymbolDef[][], onComplete: () => void, onlyCells?: Set<string>): void {
+    const nonWild = SYMBOLS.filter(s => !s.isWild);
+
+    // If onlyCells provided, figure out which columns have cells to animate
+    const isPartial = onlyCells != null;
+    const activeCellSet = onlyCells;
+
+    // Collect columns that need spinning
+    const colsToSpin = new Set<number>();
+    if (isPartial) {
+      for (const key of activeCellSet!) {
+        const c = parseInt(key.split(',')[1]);
+        colsToSpin.add(c);
+      }
+    } else {
+      for (let c = 0; c < this.activeCols; c++) colsToSpin.add(c);
+    }
+
+    // If no columns to spin, just update and done
+    if (colsToSpin.size === 0) {
+      this.setGrid(finalGrid);
+      onComplete();
+      return;
+    }
+
+    let stoppedCols = 0;
+    const totalCols = colsToSpin.size;
+
+    // Reset animated cells to spinning state with blur
     for (let r = 0; r < this.activeRows; r++) {
       for (let c = 0; c < this.activeCols; c++) {
+        if (isPartial && !activeCellSet!.has(`${r},${c}`)) continue;
         const cell = this.cells[r][c];
         cell.sprite.setVisible(true);
         cell.sprite.setAlpha(0.7);
@@ -144,38 +186,37 @@ export class SlotGrid {
       }
     }
 
-    // For each column, start cycling random symbols
-    for (let c = 0; c < this.activeCols; c++) {
+    // For each column that needs spinning
+    let colIndex = 0;
+    for (const c of colsToSpin) {
       let cycleCount = 0;
-      const stopAt = MIN_SPIN_CYCLES + c * 3; // later columns spin longer
+      const stopAt = MIN_SPIN_CYCLES + colIndex * 2; // shorter for cascade
+      colIndex++;
 
       const timer = this.scene.time.addEvent({
         delay: SPIN_CYCLE_MS,
         loop: true,
         callback: () => {
           cycleCount++;
-
-          // Whole column shifts down together then snaps back on symbol swap
           const offset = (cycleCount % 2 === 0) ? 6 : 0;
 
           for (let r = 0; r < this.activeRows; r++) {
+            if (isPartial && !activeCellSet!.has(`${r},${c}`)) continue;
             const cell = this.cells[r][c];
             const randomSym = Phaser.Utils.Array.GetRandom(nonWild);
-
             cell.sprite.setTexture(randomSym.id).setDisplaySize(SPRITE_SIZE, SPRITE_SIZE);
             cell.sprite.y = cell.baseY + offset;
             cell.bg.y = cell.baseY + offset;
           }
 
-          // Time to stop this column
           if (cycleCount >= stopAt) {
             timer.remove();
             this.stopColumn(c, finalGrid, () => {
               stoppedCols++;
-              if (stoppedCols >= this.activeCols) {
+              if (stoppedCols >= totalCols) {
                 onComplete();
               }
-            });
+            }, isPartial ? activeCellSet : undefined);
           }
         },
       });
@@ -183,10 +224,20 @@ export class SlotGrid {
   }
 
   /** Stop a single column: set final symbols and play settle animation */
-  private stopColumn(col: number, finalGrid: SymbolDef[][], onDone: () => void): void {
-    let settled = 0;
-
+  private stopColumn(col: number, finalGrid: SymbolDef[][], onDone: () => void, onlyCells?: Set<string>): void {
+    const rowsToSettle: number[] = [];
     for (let r = 0; r < this.activeRows; r++) {
+      if (onlyCells && !onlyCells.has(`${r},${col}`)) continue;
+      rowsToSettle.push(r);
+    }
+
+    if (rowsToSettle.length === 0) {
+      onDone();
+      return;
+    }
+
+    let settled = 0;
+    for (const r of rowsToSettle) {
       const cell = this.cells[r][col];
       const sym = finalGrid[r][col];
 
@@ -210,7 +261,7 @@ export class SlotGrid {
         ease: 'Bounce.easeOut',
         onComplete: () => {
           settled++;
-          if (settled >= this.activeRows) {
+          if (settled >= rowsToSettle.length) {
             onDone();
           }
         },

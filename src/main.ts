@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import './powerups/index'; // Register all powerups
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { PowerupScene } from './scenes/PowerupScene';

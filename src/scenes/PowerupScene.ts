@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import type { Powerup } from '../state/PowerupDefs';
-import { canMerge, mergePowerup } from '../state/PowerupDefs';
+import type { PowerupInstance } from '../powerups/types';
+import { registry } from '../powerups/PowerupRegistry';
 import type { RunState } from '../state/RunState';
 
 interface PowerupSceneData {
-  options: Powerup[];
+  options: PowerupInstance[];
   state: RunState;
   onComplete: () => void;
 }
@@ -50,25 +50,22 @@ export class PowerupScene extends Phaser.Scene {
     skip.on('pointerdown', () => this.closeScene());
   }
 
-  private createCard(x: number, y: number, width: number, powerup: Powerup): void {
+  private createCard(x: number, y: number, width: number, powerup: PowerupInstance): void {
     const height = 180;
 
-    // Card background
     this.add.rectangle(x, y, width, height, 0x2a2a4a)
       .setStrokeStyle(2, powerup.color).setDepth(1);
 
-    // Name
     this.add.text(x, y - 60, powerup.name, {
       fontSize: '18px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(1);
 
-    // Description
     this.add.text(x, y - 20, powerup.description, {
       fontSize: '14px', color: '#cccccc', fontFamily: 'monospace',
       wordWrap: { width: width - 20 }, align: 'center',
     }).setOrigin(0.5).setDepth(1);
 
-    // Instant/Persistent badge
+    // Instant/Passive badge
     const badge = powerup.consumable ? 'INSTANT' : 'PASSIVE';
     const badgeColor = powerup.consumable ? '#ff8844' : '#44aaff';
     this.add.text(x, y + 20, badge, {
@@ -76,7 +73,6 @@ export class PowerupScene extends Phaser.Scene {
       backgroundColor: '#1a1a2e', padding: { x: 6, y: 2 },
     }).setOrigin(0.5).setDepth(1);
 
-    // Pick button
     const btn = this.add.text(x, y + 50, '[ PICK ]', {
       fontSize: '18px', color: '#44ff44', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1);
@@ -86,7 +82,7 @@ export class PowerupScene extends Phaser.Scene {
     btn.on('pointerdown', () => this.pickPowerup(powerup));
   }
 
-  private pickPowerup(powerup: Powerup): void {
+  private pickPowerup(powerup: PowerupInstance): void {
     const state = this.sceneData.state;
 
     // Consumables apply immediately — don't occupy a slot
@@ -97,9 +93,9 @@ export class PowerupScene extends Phaser.Scene {
     }
 
     // Try to merge with existing
-    const mergeTarget = state.activePowerups.find(p => canMerge(p, powerup));
+    const mergeTarget = state.activePowerups.find(p => registry.canMerge(p, powerup));
     if (mergeTarget) {
-      mergePowerup(mergeTarget, powerup);
+      registry.merge(mergeTarget, powerup);
       this.closeScene();
       return;
     }
@@ -115,7 +111,7 @@ export class PowerupScene extends Phaser.Scene {
     this.showSwapUI(powerup);
   }
 
-  private applyConsumable(powerup: Powerup): void {
+  private applyConsumable(powerup: PowerupInstance): void {
     const state = this.sceneData.state;
     if (powerup.type === 'free_spins') {
       state.freeSpinsRemaining += powerup.value;
@@ -127,12 +123,11 @@ export class PowerupScene extends Phaser.Scene {
     }
   }
 
-  private showSwapUI(newPowerup: Powerup): void {
+  private showSwapUI(newPowerup: PowerupInstance): void {
     const W = this.cameras.main.width;
     const H = this.cameras.main.height;
     const state = this.sceneData.state;
 
-    // Clear scene and show swap options
     this.children.removeAll();
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.85).setDepth(0);
 
@@ -140,12 +135,10 @@ export class PowerupScene extends Phaser.Scene {
       fontSize: '20px', color: '#ff8844', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(1);
 
-    // Show new powerup
     this.add.text(W / 2, 80, `New: ${newPowerup.name} — ${newPowerup.description}`, {
       fontSize: '16px', color: '#44ff44', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(1);
 
-    // Show existing powerups as swap targets
     state.activePowerups.forEach((existing, i) => {
       const y = 140 + i * 50;
       const txt = this.add.text(W / 2, y,
@@ -161,7 +154,6 @@ export class PowerupScene extends Phaser.Scene {
       });
     });
 
-    // Cancel
     const cancel = this.add.text(W / 2, 140 + state.activePowerups.length * 50 + 30, '[ CANCEL ]', {
       fontSize: '18px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1);

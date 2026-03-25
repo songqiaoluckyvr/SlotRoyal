@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { spin } from '../core/SlotEngine';
-import { evaluatePaylines, generatePaylines } from '../core/PaylineEvaluator';
+import { spin, spinSingleCell } from '../core/SlotEngine';
+import type { SymbolDef } from '../core/SymbolTable';
+import { evaluatePaylines, generatePaylines, type WinResult } from '../core/PaylineEvaluator';
 import {
   createInitialState,
   placeBet,
@@ -11,13 +12,11 @@ import {
   isLevelCleared,
   isRunOver,
   checkPowerupThreshold,
-  getWeightOverrides,
-  getPayoutBonus,
   recalcGridSize,
   type RunState,
 } from '../state/RunState';
-import { createPowerup, type Powerup, type PowerupType, type Rarity } from '../state/PowerupDefs';
-// SYMBOLS import removed — rarity-based powerups don't need individual symbol lookup
+import { registry, type PowerupInstance } from '../powerups/index';
+import type { Rarity } from '../state/PowerupDefs';
 import { SlotGrid } from '../ui/SlotGrid';
 import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
@@ -53,7 +52,7 @@ export class GameScene extends Phaser.Scene {
     this.powerupSlots = new PowerupSlots(this, 15, 120);
     this.refreshUI();
 
-    // Info button (top-right area, below target text)
+    // Info button
     const infoBtn = this.add.text(this.cameras.main.width - 20, 56, '[ ? ]', {
       fontSize: '18px', color: '#aaaaff', fontFamily: 'monospace',
       backgroundColor: '#222244', padding: { x: 8, y: 4 },
@@ -66,7 +65,8 @@ export class GameScene extends Phaser.Scene {
     // Wire buttons
     this.hud.spinBtn.on('pointerdown', () => this.onSpin());
     this.hud.onBetChange = (bet: number) => {
-      setBet(this.state, bet);
+      const maxBet = registry.collectMaxBet(this.state, this.state.activePowerups);
+      setBet(this.state, bet, maxBet);
       this.refreshUI();
       this.hud.setSpinEnabled(canSpin(this.state));
     };
@@ -90,28 +90,66 @@ export class GameScene extends Phaser.Scene {
     this.hud.setSpinEnabled(false);
 
     const bet = placeBet(this.state);
+    const betAmount = bet > 0 ? bet : this.state.currentBet;
     this.refreshUI();
     this.grid.reset();
 
-    // Generate result
-    const overrides = getWeightOverrides(this.state);
-    const result = spin(this.state.gridRows, this.state.gridCols, overrides);
-    const betAmount = bet > 0 ? bet : this.state.currentBet;
+    // Hook: before spin
+    registry.runBeforeSpin(this.state, this.state.activePowerups, betAmount);
 
-    // Animate spin and reveal result
-    this.grid.spinAndReveal(result, () => {
-      // Evaluate paylines after animation completes
+    // Generate result with weight modifiers from powerups
+    const overrides = registry.collectWeightModifiers(this.state, this.state.activePowerups);
+    const result = spin(this.state.gridRows, this.state.gridCols, overrides);
+
+    // Hook: grid generated (symbol transform, sticky wilds, etc.)
+    registry.runGridGenerated(this.state, this.state.activePowerups, result);
+
+    // Build set of cells to animate — exclude sticky wild positions (they stay in place)
+    const stickyEntries = this.state.runtime.stickyWildEntries || [];
+    const stickySet = new Set<string>(stickyEntries.map(e => `${e.r},${e.c}`));
+    let spinCells: Set<string> | undefined;
+    if (stickySet.size > 0) {
+      spinCells = new Set<string>();
+      for (let r = 0; r < this.state.gridRows; r++) {
+        for (let c = 0; c < this.state.gridCols; c++) {
+          if (!stickySet.has(`${r},${c}`)) {
+            spinCells.add(`${r},${c}`);
+          }
+        }
+      }
+      // Pre-set sticky cells to wild immediately so they don't flicker
+      this.grid.setPartialGrid(result, stickySet);
+    }
+
+    // Animate spin — exclude sticky wilds which are already shown
+    const onSpinComplete = () => {
       const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
       const wins = evaluatePaylines(result, paylines, betAmount);
+
+      // Hook: win evaluated (diagonal master, etc.)
+      registry.runWinEvaluated(this.state, this.state.activePowerups, wins, betAmount);
 
       // Apply payout bonuses from powerups
       let totalWin = 0;
       for (const win of wins) {
-        const bonus = getPayoutBonus(this.state, win.symbol.id);
-        const boostedAmount = win.winAmount + (bonus * bet);
+        const bonus = registry.collectPayoutModifier(this.state, this.state.activePowerups, win.symbol.id);
+        const boostedAmount = win.winAmount + (bonus * betAmount);
         totalWin += boostedAmount;
         this.grid.highlightWin(win.winPositions);
       }
+
+      // Track consecutive wins for lucky streak
+      if (totalWin > 0) {
+        this.state.runtime.consecutiveWins++;
+      } else {
+        this.state.runtime.consecutiveWins = 0;
+      }
+
+      // Hook: after spin (insurance, compound interest, lucky streak, etc.)
+      totalWin = registry.runAfterSpin(this.state, this.state.activePowerups, totalWin, betAmount);
+
+      // Remove any spent powerups (value depleted to 0 or below)
+      this.state.activePowerups = this.state.activePowerups.filter(p => p.value > 0);
 
       if (totalWin > 0) {
         addWinnings(this.state, totalWin);
@@ -138,15 +176,78 @@ export class GameScene extends Phaser.Scene {
         });
       }
 
-      // Check game state after a short delay for win highlights
+      // Check for cascade: re-roll winning positions on a win
+      if (totalWin > 0 && this.state.runtime.cascadesRemaining > 0) {
+        this.doCascade(result, wins, betAmount);
+        return;
+      }
+
+      // Check for second chance re-spin
+      if (this.state.runtime.secondChanceTriggered) {
+        this.state.runtime.secondChanceTriggered = false;
+        this.time.delayedCall(300, () => {
+          this.phase = 'idle';
+          this.onSpin(); // trigger a free re-spin
+        });
+        return;
+      }
+
+      // Check game state after a short delay
       this.time.delayedCall(wins.length > 0 ? 800 : 200, () => {
         this.afterSpin();
       });
+    };
+    this.grid.spinAndReveal(result, onSpinComplete, spinCells);
+  }
+
+  /** Cascade: re-roll winning positions and evaluate again, recursively */
+  private doCascade(grid: SymbolDef[][], prevWins: WinResult[], betAmount: number): void {
+    this.state.runtime.cascadesRemaining--;
+
+    const overrides = registry.collectWeightModifiers(this.state, this.state.activePowerups);
+    const rerollCells = new Set<string>();
+    for (const win of prevWins) {
+      for (const [r, c] of win.winPositions) {
+        rerollCells.add(`${r},${c}`);
+      }
+    }
+    for (const key of rerollCells) {
+      const [r, c] = key.split(',').map(Number);
+      grid[r][c] = spinSingleCell(overrides);
+    }
+
+    this.time.delayedCall(600, () => {
+      // Only animate the re-rolled cells
+      this.grid.spinAndReveal(grid, () => {
+        const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
+        const wins = evaluatePaylines(grid, paylines, betAmount);
+        registry.runWinEvaluated(this.state, this.state.activePowerups, wins, betAmount);
+
+        let cascadeWin = 0;
+        for (const win of wins) {
+          const bonus = registry.collectPayoutModifier(this.state, this.state.activePowerups, win.symbol.id);
+          cascadeWin += win.winAmount + (bonus * betAmount);
+          this.grid.highlightWin(win.winPositions);
+        }
+
+        if (cascadeWin > 0) {
+          addWinnings(this.state, cascadeWin);
+          this.hud.showWin(cascadeWin);
+          this.state.runtime.consecutiveWins++;
+        }
+
+        this.refreshUI();
+
+        if (cascadeWin > 0 && this.state.runtime.cascadesRemaining > 0) {
+          this.doCascade(grid, wins, betAmount);
+        } else {
+          this.time.delayedCall(wins.length > 0 ? 800 : 200, () => this.afterSpin());
+        }
+      }, rerollCells);
     });
   }
 
   private afterSpin(): void {
-    // Check run over
     if (isRunOver(this.state)) {
       this.state.runActive = false;
       this.time.delayedCall(500, () => {
@@ -158,14 +259,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Check for powerup threshold
     const threshold = checkPowerupThreshold(this.state);
     if (threshold !== null) {
       this.offerPowerup();
       return;
     }
 
-    // Check if out of spins but target reached (auto-advance prompt)
     if (this.state.spinsRemaining <= 0 && this.state.freeSpinsRemaining <= 0 && isLevelCleared(this.state)) {
       this.onSkipLevel();
       return;
@@ -187,7 +286,7 @@ export class GameScene extends Phaser.Scene {
 
   private openInfo(): void {
     if (this.phase !== 'idle') return;
-    this.phase = 'powerup'; // reuse powerup phase to block input
+    this.phase = 'powerup';
 
     this.scene.launch('Info', {
       gridRows: this.state.gridRows,
@@ -200,7 +299,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private offerPowerup(onComplete?: () => void): void {
-    if (this.phase === 'powerup') return; // prevent double-launch
+    if (this.phase === 'powerup') return;
     this.phase = 'powerup';
     const options = this.generatePowerupOptions(3);
 
@@ -209,63 +308,40 @@ export class GameScene extends Phaser.Scene {
       state: this.state,
       onComplete: () => {
         recalcGridSize(this.state);
-        // Rebuild grid if size changed
         this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
         this.refreshUI();
 
         if (onComplete) {
           onComplete();
         } else {
-          // Reset phase so afterSpin can launch another powerup if needed
           this.phase = 'idle';
-          // Delay to let PowerupScene fully close before re-checking
           this.time.delayedCall(200, () => this.afterSpin());
         }
       },
     });
   }
 
-
-  private generatePowerupOptions(count: number): Powerup[] {
-    const allTypes: PowerupType[] = [
-      'free_spins', 'extra_row', 'extra_column',
-      'symbol_value_up', 'symbol_chance_up', 'red_pocket',
-    ];
-
-    // Filter out maxed options
-    const types = allTypes.filter(t => {
-      if (t === 'extra_row' && this.state.gridRows >= 6) return false;
-      if (t === 'extra_column' && this.state.gridCols >= 6) return false;
-      return true;
-    });
-    const options: Powerup[] = [];
+  private generatePowerupOptions(count: number): PowerupInstance[] {
+    // Get available powerups from registry (filters out maxed ones)
+    const available = registry.getAvailable(this.state);
+    const options: PowerupInstance[] = [];
     const usedTypes = new Set<string>();
 
-    while (options.length < count) {
-      const type = rng.pick(types);
-      const key = type;
+    while (options.length < count && usedTypes.size < available.length) {
+      const def = rng.pick(available);
 
       // Avoid duplicate types in same offer
-      if (usedTypes.has(key) && options.length < types.length) continue;
-      usedTypes.add(key);
+      if (usedTypes.has(def.type) && options.length < available.length) continue;
+      usedTypes.add(def.type);
 
+      // For rarity-based powerups, pick a random rarity
       let targetRarity: Rarity | undefined;
-      if (type === 'symbol_value_up' || type === 'symbol_chance_up') {
+      if (def.type === 'symbol_value_up' || def.type === 'symbol_chance_up') {
         const rarities: Rarity[] = ['common', 'uncommon', 'rare'];
         targetRarity = rng.pick(rarities);
       }
 
-      const p = createPowerup(type, targetRarity);
-
-      // Scale values with level
-      if (type === 'free_spins') {
-        p.value = 3 + this.state.level;
-        p.description = `+${p.value} free spins`;
-      }
-      if (type === 'red_pocket') {
-        p.description = `$${10 * this.state.level}–$${50 * this.state.level} cash`;
-      }
-
+      const p = def.create(1, this.state.level, targetRarity);
       options.push(p);
     }
 
