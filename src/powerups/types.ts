@@ -71,6 +71,7 @@ export interface RunStateRef {
   gridRows: number;
   gridCols: number;
   freeSpinsRemaining: number;
+  maxPowerupSlots: number;
   runtime: PowerupRuntimeState;
 }
 

@@ -3,7 +3,7 @@ import type { PowerupInstance } from '../powerups/types';
 
 const SLOT_SIZE = 40;
 const SLOT_GAP = 8;
-const MAX_SLOTS = 3;
+const MAX_POSSIBLE_SLOTS = 6;
 
 export class PowerupSlots {
   private container: Phaser.GameObjects.Container;
@@ -24,8 +24,8 @@ export class PowerupSlots {
       .setStrokeStyle(1, 0x555555).setVisible(false).setDepth(20);
     this.container.add(this.tooltipBg);
 
-    // Create 5 empty slots (vertical layout)
-    for (let i = 0; i < MAX_SLOTS; i++) {
+    // Create max possible slots (vertical layout)
+    for (let i = 0; i < MAX_POSSIBLE_SLOTS; i++) {
       const sy = i * (SLOT_SIZE + SLOT_GAP);
 
       const bg = scene.add.rectangle(SLOT_SIZE / 2, sy + SLOT_SIZE / 2, SLOT_SIZE, SLOT_SIZE, 0x222244)
@@ -55,14 +55,25 @@ export class PowerupSlots {
     }
   }
 
-  update(powerups: PowerupInstance[]): void {
-    for (let i = 0; i < MAX_SLOTS; i++) {
+  update(powerups: PowerupInstance[], maxSlots: number = 3): void {
+    for (let i = 0; i < MAX_POSSIBLE_SLOTS; i++) {
       const slot = this.slots[i];
+      if (i >= maxSlots) {
+        // Beyond current max — hide entirely
+        slot.bg.setVisible(false);
+        slot.text.setVisible(false);
+        slot.tooltip.setVisible(false);
+        continue;
+      }
+
+      slot.bg.setVisible(true);
+      slot.text.setVisible(true);
+
       if (i < powerups.length) {
         const p = powerups[i];
         slot.bg.setStrokeStyle(2, p.color);
         slot.bg.setFillStyle(p.color, 0.2);
-        // Short label: first 2 chars + level
+        // Short label: first 3 chars + level
         const shortLabel = p.name.substring(0, 3).toUpperCase();
         slot.text.setText(p.level > 1 ? `${shortLabel}\n${p.level}` : shortLabel);
         slot.tooltip.setText(`${p.name} Lv.${p.level}: ${p.description}`);

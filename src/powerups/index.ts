@@ -34,6 +34,9 @@ import './extraSpinsBase';
 import './safetyNet';
 import './secondChance';
 
+// New — Meta
+import './extraSlot';
+
 export { registry } from './PowerupRegistry';
 export type { PowerupDef, PowerupInstance, PowerupHooks, RunStateRef, PowerupRuntimeState } from './types';
 export { createRuntimeState } from './types';

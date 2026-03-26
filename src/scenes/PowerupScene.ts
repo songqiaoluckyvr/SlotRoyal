@@ -101,7 +101,7 @@ export class PowerupScene extends Phaser.Scene {
     }
 
     // If slots available, just add
-    if (state.activePowerups.length < 3) {
+    if (state.activePowerups.length < state.maxPowerupSlots) {
       state.activePowerups.push(powerup);
       this.closeScene();
       return;
@@ -120,6 +120,9 @@ export class PowerupScene extends Phaser.Scene {
       const reward = Phaser.Math.Between(10, 50) * state.level;
       state.bankroll += reward;
       state.levelEarnings += reward;
+    }
+    if (powerup.type === 'extra_slot') {
+      state.maxPowerupSlots += 1;
     }
   }
 

@@ -13,6 +13,8 @@ export class HUD {
   private denomBtns: { btn: Phaser.GameObjects.Text; value: number }[] = [];
   private betText!: Phaser.GameObjects.Text;
   private selectedDenom = 1;
+  private maxBetLabel!: Phaser.GameObjects.Text;
+  private currentMaxBet = 25;
 
   spinBtn!: Phaser.GameObjects.Image;
   betUpBtn!: Phaser.GameObjects.Text;
@@ -92,7 +94,7 @@ export class HUD {
     }
     this.updateDenomColors();
 
-    this.scene.add.text(betCenterX, betY + 25, 'Min $1 · Max $25', {
+    this.maxBetLabel = this.scene.add.text(betCenterX, betY + 25, 'Min $1 · Max $25', {
       fontSize: '11px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
@@ -128,6 +130,56 @@ export class HUD {
 
   getDenom(): number {
     return this.selectedDenom;
+  }
+
+  updateMaxBet(maxBet: number): void {
+    if (maxBet === this.currentMaxBet) return;
+    this.currentMaxBet = maxBet;
+
+    // Rebuild denom options: powers/multiples up to maxBet
+    const denoms: number[] = [1];
+    if (maxBet >= 5) denoms.push(5);
+    if (maxBet >= 10) denoms.push(10);
+    if (maxBet >= 25) denoms.push(25);
+    if (maxBet >= 50) denoms.push(50);
+    if (maxBet >= 100) denoms.push(100);
+
+    const W = this.scene.cameras.main.width;
+    const betCenterX = W / 2;
+    const betY = this.denomBtns[0]?.btn.y ?? 0;
+    const denomStartX = betCenterX - ((denoms.length - 1) * 60) / 2;
+
+    // Remove old buttons
+    for (const d of this.denomBtns) {
+      d.btn.destroy();
+    }
+    this.denomBtns = [];
+
+    // Create new buttons
+    for (let i = 0; i < denoms.length; i++) {
+      const value = denoms[i];
+      const btn = this.scene.add.text(denomStartX + i * 60, betY, `$${value}`, {
+        fontSize: '18px', color: '#888888', fontFamily: 'monospace',
+        backgroundColor: '#222244',
+        padding: { x: 10, y: 6 },
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      btn.on('pointerdown', () => {
+        this.selectedDenom = value;
+        this.updateDenomColors();
+        if (this.onBetChange) this.onBetChange(value);
+      });
+
+      this.denomBtns.push({ btn, value });
+    }
+
+    // Clamp selected denom
+    if (this.selectedDenom > maxBet) {
+      this.selectedDenom = denoms[denoms.length - 1];
+    }
+
+    this.updateDenomColors();
+    this.maxBetLabel.setText(`Min $1 · Max $${maxBet}`);
   }
 
   update(state: RunState): void {

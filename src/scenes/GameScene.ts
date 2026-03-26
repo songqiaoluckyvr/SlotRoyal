@@ -78,8 +78,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshUI(): void {
+    const maxBet = registry.collectMaxBet(this.state, this.state.activePowerups);
+    this.hud.updateMaxBet(maxBet);
     this.hud.update(this.state);
-    this.powerupSlots.update(this.state.activePowerups);
+    this.powerupSlots.update(this.state.activePowerups, this.state.maxPowerupSlots);
   }
 
   private onSpin(): void {

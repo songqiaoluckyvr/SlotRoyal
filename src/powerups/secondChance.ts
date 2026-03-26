@@ -13,17 +13,17 @@ const def: PowerupDef = {
     id: `second_chance_${Date.now()}`,
     type: 'second_chance',
     name: 'Second Chance',
-    description: '1 free re-spin per level on loss',
+    description: '3 free re-spins on loss',
     color: 0xffcc44,
-    value: 1, // uses per level
+    value: 3, // uses per level
     consumable: false,
     level: 1,
   }),
 
   merge: (existing, _incoming) => {
     existing.level += 1;
-    existing.value += 1;
-    existing.description = `${existing.value} free re-spins per level on loss`;
+    existing.value += 3;
+    existing.description = `${existing.value} free re-spins on loss`;
   },
 
   hooks: {
@@ -32,13 +32,14 @@ const def: PowerupDef = {
       state.runtime.secondChanceTriggered = false;
     },
 
-    onAfterSpin: (state, powerup, totalWin, _bet) => {
+    onAfterSpin: (state, powerup, totalWin, bet) => {
       // Only trigger once per spin on a loss, if charges remain
       if (totalWin === 0 && !state.runtime.secondChanceTriggered && powerup.value > 0) {
         powerup.value--;
         state.runtime.secondChanceTriggered = true;
-        // Refund the spin so it doesn't count
+        // Refund both the spin count and the bet
         state.spinsRemaining++;
+        state.bankroll += bet;
         // Update description
         powerup.description = `${powerup.value} re-spins remaining`;
       }

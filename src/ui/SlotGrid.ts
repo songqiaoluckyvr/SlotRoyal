@@ -130,7 +130,9 @@ export class SlotGrid {
         const cell = this.cells[r][c];
         const sym = grid[r][c];
         cell.sprite.setTexture(sym.id).setDisplaySize(SPRITE_SIZE, SPRITE_SIZE);
+        cell.sprite.setVisible(true);
         cell.sprite.setAlpha(1);
+        if (cell.sprite.preFX) cell.sprite.preFX.clear();
         cell.sprite.y = cell.baseY;
         cell.bg.y = cell.baseY;
         cell.bg.setFillStyle(sym.color, 0.15);

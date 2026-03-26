@@ -24,6 +24,7 @@ export function createInitialState(): RunState {
     gridCols: 3,
     activePowerups: [],
     freeSpinsRemaining: 0,
+    maxPowerupSlots: 3,
     powerupThresholdsHit: [],
     runActive: true,
     runtime: createRuntimeState(),
