@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xffcc44,
   consumable: false,
   category: 'passive',
+  tier: 'silver',
 
   create: () => ({
     id: `second_chance_${Date.now()}`,
@@ -27,20 +28,16 @@ const def: PowerupDef = {
   },
 
   hooks: {
-    onBeforeSpin: (state, _powerup, _bet) => {
-      // Clear trigger flag before each spin
-      state.runtime.secondChanceTriggered = false;
-    },
-
     onAfterSpin: (state, powerup, totalWin, bet) => {
-      // Only trigger once per spin on a loss, if charges remain
-      if (totalWin === 0 && !state.runtime.secondChanceTriggered && powerup.value > 0) {
+      if (totalWin > 0) {
+        // Win — reset flag so next losing spin can trigger
+        state.runtime.secondChanceTriggered = false;
+      } else if (!state.runtime.secondChanceTriggered && powerup.value > 0) {
+        // Loss + not already triggered this spin cycle — use one charge
         powerup.value--;
         state.runtime.secondChanceTriggered = true;
-        // Refund both the spin count and the bet
         state.spinsRemaining++;
         state.bankroll += bet;
-        // Update description
         powerup.description = `${powerup.value} re-spins remaining`;
       }
       return totalWin;

@@ -16,7 +16,7 @@ import {
   type RunState,
 } from '../state/RunState';
 import { registry, type PowerupInstance } from '../powerups/index';
-import type { Rarity } from '../state/PowerupDefs';
+import { TIER_WEIGHTS_BY_THRESHOLD, type Rarity, type PowerupTier } from '../state/PowerupDefs';
 import { SlotGrid } from '../ui/SlotGrid';
 import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
@@ -112,6 +112,23 @@ export class GameScene extends Phaser.Scene {
 
     // Hook: grid generated (symbol transform, sticky wilds, etc.)
     registry.runGridGenerated(this.state, this.state.activePowerups, result);
+
+    // Scan for new wilds after ALL grid hooks — sticky wilds tracks them
+    const stickyPowerup = this.state.activePowerups.find(p => p.type === 'sticky_wilds');
+    if (stickyPowerup && this.state.runtime.stickyWildEntries) {
+      // Exclude: positions already tracked + positions placed from previous sticky entries
+      const existingKeys = new Set(this.state.runtime.stickyWildEntries.map(e => `${e.r},${e.c}`));
+      const placedKeys = new Set(this.state.runtime.stickyWildPlacedThisSpin || []);
+      for (let r = 0; r < this.state.gridRows; r++) {
+        for (let c = 0; c < this.state.gridCols; c++) {
+          const key = `${r},${c}`;
+          if (result[r][c].isWild && !existingKeys.has(key) && !placedKeys.has(key)) {
+            this.state.runtime.stickyWildEntries.push({ r, c, turns: stickyPowerup.value });
+          }
+        }
+      }
+    }
+
     let spinCells: Set<string> | undefined;
     if (stickySet.size > 0) {
       spinCells = new Set<string>();
@@ -187,9 +204,8 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      // Check for second chance re-spin
+      // Check for second chance re-spin — keep flag true so it doesn't retrigger
       if (this.state.runtime.secondChanceTriggered) {
-        this.state.runtime.secondChanceTriggered = false;
         this.time.delayedCall(300, () => {
           this.phase = 'idle';
           this.onSpin(); // trigger a free re-spin
@@ -266,7 +282,7 @@ export class GameScene extends Phaser.Scene {
 
     const threshold = checkPowerupThreshold(this.state);
     if (threshold !== null) {
-      this.offerPowerup();
+      this.offerPowerup(threshold);
       return;
     }
 
@@ -303,10 +319,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private offerPowerup(onComplete?: () => void): void {
+  private offerPowerup(threshold: number, onComplete?: () => void): void {
     if (this.phase === 'powerup') return;
     this.phase = 'powerup';
-    const options = this.generatePowerupOptions(3);
+    const options = this.generatePowerupOptions(3, threshold);
 
     this.scene.launch('Powerup', {
       options,
@@ -326,20 +342,43 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private generatePowerupOptions(count: number): PowerupInstance[] {
-    // Get available powerups from registry (filters out maxed ones)
+  private generatePowerupOptions(count: number, threshold: number): PowerupInstance[] {
     const available = registry.getAvailable(this.state);
+
+    // Roll one tier for all 3 options
+    const tierWeights = TIER_WEIGHTS_BY_THRESHOLD[threshold] ?? TIER_WEIGHTS_BY_THRESHOLD[0.25];
+    const tiers: PowerupTier[] = ['bronze', 'silver', 'gold', 'rainbow'];
+    const weights = tiers.map(t => tierWeights[t]);
+
+    // Try to find a tier with enough powerups; fall back to lower tiers
+    let selectedTier = rng.weightedPick(tiers, weights);
+    let tierPool = available.filter(d => d.tier === selectedTier);
+    if (tierPool.length < count) {
+      // Not enough in this tier — try next lower tier
+      const tierOrder: PowerupTier[] = ['rainbow', 'gold', 'silver', 'bronze'];
+      for (const fallback of tierOrder) {
+        const pool = available.filter(d => d.tier === fallback);
+        if (pool.length >= count) {
+          selectedTier = fallback;
+          tierPool = pool;
+          break;
+        }
+      }
+    }
+
     const options: PowerupInstance[] = [];
     const usedTypes = new Set<string>();
 
-    while (options.length < count && usedTypes.size < available.length) {
-      const def = rng.pick(available);
+    let attempts = 0;
+    while (options.length < count && attempts < 100) {
+      attempts++;
 
-      // Avoid duplicate types in same offer
-      if (usedTypes.has(def.type) && options.length < available.length) continue;
+      const remaining = tierPool.filter(d => !usedTypes.has(d.type));
+      if (remaining.length === 0) break;
+
+      const def = rng.pick(remaining);
       usedTypes.add(def.type);
 
-      // For rarity-based powerups, pick a random rarity
       let targetRarity: Rarity | undefined;
       if (def.type === 'symbol_value_up' || def.type === 'symbol_chance_up') {
         const rarities: Rarity[] = ['common', 'uncommon', 'rare'];
@@ -347,6 +386,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       const p = def.create(1, this.state.level, targetRarity);
+      p.tier = def.tier;
       options.push(p);
     }
 

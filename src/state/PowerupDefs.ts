@@ -8,6 +8,30 @@ export type PowerupType =
 
 export type Rarity = 'common' | 'uncommon' | 'rare';
 
+export type PowerupTier = 'bronze' | 'silver' | 'gold' | 'rainbow';
+
+export const TIER_LABELS: Record<PowerupTier, string> = {
+  bronze: 'Bronze',
+  silver: 'Silver',
+  gold: 'Gold',
+  rainbow: 'Rainbow',
+};
+
+export const TIER_COLORS: Record<PowerupTier, number> = {
+  bronze: 0xcd7f32,
+  silver: 0xc0c0c0,
+  gold: 0xffd700,
+  rainbow: 0xff44ff,
+};
+
+/** Tier selection weights by progress threshold */
+export const TIER_WEIGHTS_BY_THRESHOLD: Record<number, Record<PowerupTier, number>> = {
+  0.25: { bronze: 50, silver: 25, gold: 15, rainbow: 10 },
+  0.50: { bronze: 25, silver: 50, gold: 15, rainbow: 10 },
+  0.75: { bronze: 10, silver: 25, gold: 50, rainbow: 15 },
+  1.00: { bronze: 5, silver: 15, gold: 25, rainbow: 45 },  // missed opportunity: was 55
+};
+
 export const RARITY_LABELS: Record<Rarity, string> = {
   common: 'Common',
   uncommon: 'Uncommon',

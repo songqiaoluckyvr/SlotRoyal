@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0x44dd88,
   consumable: false,
   category: 'passive',
+  tier: 'gold',
 
   create: () => ({
     id: `compound_interest_${Date.now()}`,

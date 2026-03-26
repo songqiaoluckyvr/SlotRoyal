@@ -12,6 +12,7 @@ function createDef(): PowerupDef {
     color: 0xcc44ff,
     consumable: false,
     category: 'passive',
+    tier: 'silver',
 
     create: (_level, _gameLevel, targetRarity?: Rarity) => {
       const label = targetRarity ? RARITY_LABELS[targetRarity] : '?';

@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xeeaa00,
   consumable: false,
   category: 'passive',
+  tier: 'silver',
 
   create: () => ({
     id: `big_bet_bonus_${Date.now()}`,

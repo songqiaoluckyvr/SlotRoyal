@@ -1,7 +1,7 @@
 import type { SymbolDef } from '../core/SymbolTable';
 import type { WinResult } from '../core/PaylineEvaluator';
 import type { SymbolWeightOverride } from '../core/SlotEngine';
-import type { Rarity } from '../state/PowerupDefs';
+import type { Rarity, PowerupTier } from '../state/PowerupDefs';
 
 /** Shared runtime state for powerups that need cross-spin tracking */
 export interface PowerupRuntimeState {
@@ -9,6 +9,8 @@ export interface PowerupRuntimeState {
   stickyWildPositions: [number, number][];
   stickyWildTurnsLeft: number;
   stickyWildEntries: { r: number; c: number; turns: number }[];
+  /** Positions placed by sticky wilds this spin — excluded from new-wild scan */
+  stickyWildPlacedThisSpin: string[];
   safetyNetUsed: boolean;
   secondChanceUsedThisLevel: number;
   cascadesRemaining: number;
@@ -24,6 +26,7 @@ export function createRuntimeState(): PowerupRuntimeState {
     stickyWildPositions: [],
     stickyWildTurnsLeft: 0,
     stickyWildEntries: [],
+    stickyWildPlacedThisSpin: [],
     safetyNetUsed: false,
     secondChanceUsedThisLevel: 0,
     cascadesRemaining: 0,
@@ -83,6 +86,7 @@ export interface PowerupInstance {
   description: string;
   color: number;
   targetRarity?: Rarity;
+  tier?: PowerupTier;
   value: number;
   consumable: boolean;
   level: number;
@@ -96,6 +100,7 @@ export interface PowerupDef {
   color: number;
   consumable: boolean;
   category: 'instant' | 'passive';
+  tier: PowerupTier;
 
   /** Create a powerup instance */
   create: (level: number, gameLevel: number, targetRarity?: Rarity) => PowerupInstance;

@@ -10,6 +10,7 @@ const def: PowerupDef = {
   color: 0xcc66ff,
   consumable: true,
   category: 'instant',
+  tier: 'rainbow',
 
   create: () => ({
     id: `extra_slot_${Date.now()}`,

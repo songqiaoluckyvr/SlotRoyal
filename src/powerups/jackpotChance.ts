@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xff44ff,
   consumable: false,
   category: 'passive',
+  tier: 'gold',
 
   create: () => ({
     id: `jackpot_chance_${Date.now()}`,

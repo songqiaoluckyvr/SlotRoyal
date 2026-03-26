@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xff2222,
   consumable: true,
   category: 'instant',
+  tier: 'bronze',
 
   create: (_level, gameLevel) => ({
     id: `red_pocket_${Date.now()}`,

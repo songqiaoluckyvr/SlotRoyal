@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0x88cc44,
   consumable: false,
   category: 'passive',
+  tier: 'bronze',
 
   create: () => ({
     id: `extra_spins_base_${Date.now()}`,

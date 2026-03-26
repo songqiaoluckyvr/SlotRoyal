@@ -11,6 +11,7 @@ const def: PowerupDef = {
   color: 0x44ccff,
   consumable: false,
   category: 'passive',
+  tier: 'gold',
 
   create: () => ({
     id: `cascade_${Date.now()}`,

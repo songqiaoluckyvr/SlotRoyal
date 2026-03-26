@@ -11,6 +11,7 @@ const def: PowerupDef = {
   color: 0xffffff,
   consumable: false,
   category: 'passive',
+  tier: 'silver',
 
   create: () => ({
     id: `wild_magnet_${Date.now()}`,

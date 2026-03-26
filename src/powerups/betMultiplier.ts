@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xddaa22,
   consumable: false,
   category: 'passive',
+  tier: 'silver',
 
   create: () => ({
     id: `bet_multiplier_${Date.now()}`,

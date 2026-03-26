@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xff6600,
   consumable: false,
   category: 'passive',
+  tier: 'gold',
 
   create: () => ({
     id: `lucky_streak_${Date.now()}`,

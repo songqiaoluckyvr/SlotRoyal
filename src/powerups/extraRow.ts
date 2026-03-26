@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0xff8844,
   consumable: false,
   category: 'passive',
+  tier: 'rainbow',
 
   create: () => ({
     id: `extra_row_${Date.now()}`,

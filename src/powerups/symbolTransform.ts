@@ -11,6 +11,7 @@ const def: PowerupDef = {
   color: 0xaa88ff,
   consumable: false,
   category: 'passive',
+  tier: 'rainbow',
 
   create: () => ({
     id: `symbol_transform_${Date.now()}`,

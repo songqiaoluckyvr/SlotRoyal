@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0x88aaff,
   consumable: false,
   category: 'passive',
+  tier: 'bronze',
 
   create: () => ({
     id: `diagonal_master_${Date.now()}`,

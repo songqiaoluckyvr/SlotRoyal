@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SYMBOLS } from '../core/SymbolTable';
 import { generatePaylines } from '../core/PaylineEvaluator';
 import { registry } from '../powerups/PowerupRegistry';
+import { TIER_COLORS, TIER_LABELS, type PowerupTier } from '../state/PowerupDefs';
 
 interface InfoSceneData {
   onClose: () => void;
@@ -250,54 +251,59 @@ export class InfoScene extends Phaser.Scene {
   private buildPowerupTab(W: number): void {
     let y = 0;
 
-    // Pull powerup list dynamically from registry
     const allDefs = registry.getAll();
-    const powerups = allDefs.map(def => ({
-      name: def.name,
-      desc: def.description,
-      color: def.color,
-      type: def.category === 'instant' ? 'Instant' : 'Passive',
-    }));
-
-    // Two-column layout to fit all powerups
+    const tierOrder: PowerupTier[] = ['bronze', 'silver', 'gold', 'rainbow'];
     const colWidth = (W - 60) / 2;
-    const rowH = 48;
-    const cols = 2;
+    const rowH = 38;
 
-    for (let i = 0; i < powerups.length; i++) {
-      const pu = powerups[i];
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const baseX = 30 + col * colWidth;
-      const baseY = y + row * rowH;
-      const colorStr = `#${pu.color.toString(16).padStart(6, '0')}`;
+    for (const tier of tierOrder) {
+      const tierDefs = allDefs.filter(d => d.tier === tier);
+      if (tierDefs.length === 0) continue;
 
-      // Accent dot
-      this.contentContainer.add(this.add.rectangle(baseX, baseY + 10, 6, 6, pu.color));
+      const tierColor = TIER_COLORS[tier];
+      const tierHex = '#' + tierColor.toString(16).padStart(6, '0');
 
-      // Name + badge
-      const typeTag = pu.type === 'Instant' ? ' ⚡' : '';
-      this.contentContainer.add(this.add.text(baseX + 12, baseY, pu.name + typeTag, {
-        fontSize: '13px', color: colorStr, fontFamily: 'monospace', fontStyle: 'bold',
+      // Tier header with colored line
+      this.contentContainer.add(this.add.text(30, y, TIER_LABELS[tier].toUpperCase(), {
+        fontSize: '12px', color: tierHex, fontFamily: 'monospace', fontStyle: 'bold',
       }));
+      this.contentContainer.add(
+        this.add.rectangle(W / 2, y + 16, W - 60, 1, tierColor).setAlpha(0.4)
+      );
+      y += 22;
 
-      // Description
-      this.contentContainer.add(this.add.text(baseX + 12, baseY + 18, pu.desc, {
-        fontSize: '10px', color: '#aaaaaa', fontFamily: 'monospace',
-        wordWrap: { width: colWidth - 24 },
-      }));
+      // Two-column layout within each tier
+      for (let i = 0; i < tierDefs.length; i++) {
+        const def = tierDefs[i];
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const baseX = 30 + col * colWidth;
+        const baseY = y + row * rowH;
+
+        // Tier-colored dot
+        this.contentContainer.add(this.add.rectangle(baseX, baseY + 8, 6, 6, tierColor));
+
+        // Name
+        const typeTag = def.consumable ? ' *' : '';
+        this.contentContainer.add(this.add.text(baseX + 12, baseY, def.name + typeTag, {
+          fontSize: '12px', color: '#dddddd', fontFamily: 'monospace', fontStyle: 'bold',
+        }));
+
+        // Description
+        this.contentContainer.add(this.add.text(baseX + 12, baseY + 16, def.description, {
+          fontSize: '10px', color: '#999999', fontFamily: 'monospace',
+          wordWrap: { width: colWidth - 24 },
+        }));
+      }
+
+      y += Math.ceil(tierDefs.length / 2) * rowH + 6;
     }
 
-    const totalRows = Math.ceil(powerups.length / cols);
-    y += totalRows * rowH + 10;
-
     // Notes
-    const noteText = '⚡ = Instant (no slot needed)  ·  Max 3 passive slots  ·  Same-type merge to upgrade';
-    this.contentContainer.add(this.add.text(W / 2, y, noteText, {
+    this.contentContainer.add(this.add.text(W / 2, y, '* = Instant (no slot needed)  ·  Same-type merge to upgrade (max Lv.3)', {
       fontSize: '10px', color: '#bbbbbb', fontFamily: 'monospace',
       wordWrap: { width: W - 60 },
     }).setOrigin(0.5, 0));
-    y += 22;
   }
 
   private closeScene(): void {

@@ -11,6 +11,7 @@ const def: PowerupDef = {
   color: 0x44cc88,
   consumable: false,
   category: 'passive',
+  tier: 'silver',
 
   create: () => ({
     id: `insurance_${Date.now()}`,

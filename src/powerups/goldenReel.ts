@@ -9,6 +9,7 @@ const def: PowerupDef = {
   color: 0xffdd44,
   consumable: false,
   category: 'passive',
+  tier: 'bronze',
 
   create: () => ({
     id: `golden_reel_${Date.now()}`,

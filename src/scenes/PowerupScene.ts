@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { PowerupInstance } from '../powerups/types';
 import { registry } from '../powerups/PowerupRegistry';
 import type { RunState } from '../state/RunState';
+import { TIER_COLORS } from '../state/PowerupDefs';
 
 interface PowerupSceneData {
   options: PowerupInstance[];
@@ -53,8 +54,10 @@ export class PowerupScene extends Phaser.Scene {
   private createCard(x: number, y: number, width: number, powerup: PowerupInstance): void {
     const height = 180;
 
+    const tierColor = powerup.tier ? TIER_COLORS[powerup.tier] : powerup.color;
+
     this.add.rectangle(x, y, width, height, 0x2a2a4a)
-      .setStrokeStyle(2, powerup.color).setDepth(1);
+      .setStrokeStyle(3, tierColor).setDepth(1);
 
     this.add.text(x, y - 60, powerup.name, {
       fontSize: '18px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',

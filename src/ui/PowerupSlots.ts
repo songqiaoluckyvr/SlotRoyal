@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { PowerupInstance } from '../powerups/types';
+import { TIER_COLORS } from '../state/PowerupDefs';
 
 const SLOT_SIZE = 40;
 const SLOT_GAP = 8;
@@ -59,10 +60,10 @@ export class PowerupSlots {
     for (let i = 0; i < MAX_POSSIBLE_SLOTS; i++) {
       const slot = this.slots[i];
       if (i >= maxSlots) {
-        // Beyond current max — hide entirely
         slot.bg.setVisible(false);
         slot.text.setVisible(false);
         slot.tooltip.setVisible(false);
+        if (slot.bg.preFX) slot.bg.preFX.clear();
         continue;
       }
 
@@ -71,13 +72,21 @@ export class PowerupSlots {
 
       if (i < powerups.length) {
         const p = powerups[i];
-        slot.bg.setStrokeStyle(2, p.color);
-        slot.bg.setFillStyle(p.color, 0.2);
-        // Short label: first 3 chars + level
+        const tierColor = p.tier ? TIER_COLORS[p.tier] : p.color;
+        slot.bg.setStrokeStyle(2, tierColor);
+        slot.bg.setFillStyle(tierColor, 0.15);
+
+        // Add tier-colored glow
+        if (slot.bg.preFX) {
+          slot.bg.preFX.clear();
+          slot.bg.preFX.addGlow(tierColor, 3, 0, false, 0.1, 10);
+        }
+
         const shortLabel = p.name.substring(0, 3).toUpperCase();
         slot.text.setText(p.level > 1 ? `${shortLabel}\n${p.level}` : shortLabel);
         slot.tooltip.setText(`${p.name} Lv.${p.level}: ${p.description}`);
       } else {
+        if (slot.bg.preFX) slot.bg.preFX.clear();
         slot.bg.setStrokeStyle(1, 0x444466);
         slot.bg.setFillStyle(0x222244);
         slot.text.setText('');

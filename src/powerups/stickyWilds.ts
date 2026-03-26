@@ -11,6 +11,7 @@ const def: PowerupDef = {
   color: 0xffaaff,
   consumable: false,
   category: 'passive',
+  tier: 'gold',
 
   create: () => ({
     id: `sticky_wilds_${Date.now()}`,
@@ -30,33 +31,26 @@ const def: PowerupDef = {
   },
 
   hooks: {
-    onGridGenerated: (state, powerup, grid) => {
-      // Track sticky positions with remaining turns each
+    onGridGenerated: (state, _powerup, grid) => {
       if (!state.runtime.stickyWildEntries) {
         state.runtime.stickyWildEntries = [];
       }
 
-      // Place existing sticky wilds onto the grid
+      // Place existing sticky wilds onto the grid, decrement turns
       const stillActive: { r: number; c: number; turns: number }[] = [];
+      const placedPositions: string[] = [];
       for (const entry of state.runtime.stickyWildEntries) {
         if (entry.turns > 0 && entry.r < state.gridRows && entry.c < state.gridCols) {
           grid[entry.r][entry.c] = wildSymbol;
+          placedPositions.push(`${entry.r},${entry.c}`);
           stillActive.push({ ...entry, turns: entry.turns - 1 });
         }
       }
 
-      // Find NEW wilds from this spin (not already sticky)
-      const stickySet = new Set(stillActive.map(e => `${e.r},${e.c}`));
-      for (let r = 0; r < state.gridRows; r++) {
-        for (let c = 0; c < state.gridCols; c++) {
-          if (grid[r][c].isWild && !stickySet.has(`${r},${c}`)) {
-            stillActive.push({ r, c, turns: powerup.value });
-          }
-        }
-      }
-
-      // Remove expired entries (turns <= 0)
+      // Keep entries with remaining turns
       state.runtime.stickyWildEntries = stillActive.filter(e => e.turns > 0);
+      // Store placed positions so GameScene scan can exclude them
+      state.runtime.stickyWildPlacedThisSpin = placedPositions;
     },
   },
 };

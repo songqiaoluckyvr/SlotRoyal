@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0x44ff44,
   consumable: true,
   category: 'instant',
+  tier: 'bronze',
 
   create: (_level, gameLevel) => ({
     id: `free_spins_${Date.now()}`,

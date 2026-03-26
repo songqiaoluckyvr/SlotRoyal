@@ -8,6 +8,7 @@ const def: PowerupDef = {
   color: 0x44ff88,
   consumable: false,
   category: 'passive',
+  tier: 'bronze',
 
   create: () => ({
     id: `safety_net_${Date.now()}`,
