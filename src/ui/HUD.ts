@@ -9,7 +9,6 @@ export class HUD {
   private targetText!: Phaser.GameObjects.Text;
   private progressBar!: Phaser.GameObjects.Rectangle;
   private thresholdMarkers: { threshold: number; icon: Phaser.GameObjects.Text }[] = [];
-  private winText!: Phaser.GameObjects.Text;
   private denomBtns: { btn: Phaser.GameObjects.Text; value: number }[] = [];
   private betText!: Phaser.GameObjects.Text;
   private selectedDenom = 1;
@@ -110,10 +109,6 @@ export class HUD {
       fontSize: '16px', color: '#aaaaff', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setVisible(false);
 
-    // Win text (floats above grid)
-    this.winText = this.scene.add.text(W / 2, 60, '', {
-      fontSize: '42px', color: '#ffcc00', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5).setAlpha(0);
   }
 
   private updateDenomColors(): void {
@@ -220,25 +215,27 @@ export class HUD {
   }
 
   showWin(amount: number): void {
-    this.winText.setText(`+$${amount}`);
-    this.winText.setAlpha(1);
-    this.winText.setScale(1.3);
-    this.winText.setY(70);
+    const W = this.scene.cameras.main.width;
+    const winPopup = this.scene.add.text(W / 2, 70, `+$${amount}`, {
+      fontSize: '42px', color: '#ffcc00', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(1).setScale(1.3).setDepth(50);
+
     // Pop in
     this.scene.tweens.add({
-      targets: this.winText,
+      targets: winPopup,
       scale: 1,
       duration: 200,
       ease: 'Back.easeOut',
     });
-    // Fade out after holding
+    // Fade out and destroy
     this.scene.tweens.add({
-      targets: this.winText,
+      targets: winPopup,
       y: 45,
       alpha: 0,
       delay: 2000,
       duration: 1000,
       ease: 'Power2',
+      onComplete: () => winPopup.destroy(),
     });
   }
 

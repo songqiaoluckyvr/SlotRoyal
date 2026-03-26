@@ -59,18 +59,40 @@ export class PowerupScene extends Phaser.Scene {
     this.add.rectangle(x, y, width, height, 0x2a2a4a)
       .setStrokeStyle(3, tierColor).setDepth(1);
 
-    this.add.text(x, y - 60, powerup.name, {
-      fontSize: '18px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+    const isMerge = !!powerup.mergePreview;
+
+    // Name
+    this.add.text(x, y - 68, powerup.name, {
+      fontSize: '18px', color: isMerge ? '#ffcc00' : '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(1);
 
-    this.add.text(x, y - 20, powerup.description, {
+    // Level-up indicator on separate line
+    if (isMerge) {
+      this.add.text(x, y - 48, `^ Lv.${powerup.mergePreview!.currentLevel} -> Lv.${powerup.mergePreview!.newLevel}`, {
+        fontSize: '12px', color: '#ffcc00', fontFamily: 'monospace',
+      }).setOrigin(0.5).setDepth(1);
+    }
+
+    // Description — show new effect for merges, base effect for new pickups
+    const descText = isMerge ? powerup.mergePreview!.newDescription : powerup.description;
+    this.add.text(x, y - 20, descText, {
       fontSize: '14px', color: '#cccccc', fontFamily: 'monospace',
       wordWrap: { width: width - 20 }, align: 'center',
     }).setOrigin(0.5).setDepth(1);
 
-    // Instant/Passive badge
-    const badge = powerup.consumable ? 'INSTANT' : 'PASSIVE';
-    const badgeColor = powerup.consumable ? '#ff8844' : '#44aaff';
+    // Badge: LEVEL UP / INSTANT / PASSIVE
+    let badge: string;
+    let badgeColor: string;
+    if (isMerge) {
+      badge = 'LEVEL UP';
+      badgeColor = '#ffcc00';
+    } else if (powerup.consumable) {
+      badge = 'INSTANT';
+      badgeColor = '#ff8844';
+    } else {
+      badge = 'PASSIVE';
+      badgeColor = '#44aaff';
+    }
     this.add.text(x, y + 20, badge, {
       fontSize: '11px', color: badgeColor, fontFamily: 'monospace',
       backgroundColor: '#1a1a2e', padding: { x: 6, y: 2 },

@@ -221,24 +221,36 @@ export class GameScene extends Phaser.Scene {
     this.grid.spinAndReveal(result, onSpinComplete, spinCells);
   }
 
-  /** Cascade: re-roll winning positions and evaluate again, recursively */
-  private doCascade(grid: SymbolDef[][], prevWins: WinResult[], betAmount: number): void {
-    this.state.runtime.cascadesRemaining--;
-
-    const overrides = registry.collectWeightModifiers(this.state, this.state.activePowerups);
+  /** Cascade: re-roll the original winning positions N times, regardless of win/loss */
+  private doCascade(grid: SymbolDef[][], initialWins: WinResult[], betAmount: number): void {
+    // Collect the fixed set of positions to re-roll (from the original win)
     const rerollCells = new Set<string>();
-    for (const win of prevWins) {
+    for (const win of initialWins) {
       for (const [r, c] of win.winPositions) {
         rerollCells.add(`${r},${c}`);
       }
     }
+
+    const totalCascades = this.state.runtime.cascadesRemaining;
+    this.state.runtime.cascadesRemaining = 0; // consumed all at once
+
+    this.doCascadeStep(grid, rerollCells, betAmount, totalCascades);
+  }
+
+  /** Single cascade step — re-roll, evaluate, then recurse if steps remain */
+  private doCascadeStep(grid: SymbolDef[][], rerollCells: Set<string>, betAmount: number, stepsLeft: number): void {
+    if (stepsLeft <= 0) {
+      this.time.delayedCall(200, () => this.afterSpin());
+      return;
+    }
+
+    const overrides = registry.collectWeightModifiers(this.state, this.state.activePowerups);
     for (const key of rerollCells) {
       const [r, c] = key.split(',').map(Number);
       grid[r][c] = spinSingleCell(overrides);
     }
 
     this.time.delayedCall(600, () => {
-      // Only animate the re-rolled cells
       this.grid.spinAndReveal(grid, () => {
         const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
         const wins = evaluatePaylines(grid, paylines, betAmount);
@@ -254,16 +266,12 @@ export class GameScene extends Phaser.Scene {
         if (cascadeWin > 0) {
           addWinnings(this.state, cascadeWin);
           this.hud.showWin(cascadeWin);
-          this.state.runtime.consecutiveWins++;
         }
 
         this.refreshUI();
 
-        if (cascadeWin > 0 && this.state.runtime.cascadesRemaining > 0) {
-          this.doCascade(grid, wins, betAmount);
-        } else {
-          this.time.delayedCall(wins.length > 0 ? 800 : 200, () => this.afterSpin());
-        }
+        // Always continue to next step regardless of win/loss
+        this.doCascadeStep(grid, rerollCells, betAmount, stepsLeft - 1);
       }, rerollCells);
     });
   }
@@ -387,6 +395,20 @@ export class GameScene extends Phaser.Scene {
 
       const p = def.create(1, this.state.level, targetRarity);
       p.tier = def.tier;
+
+      // Check if this would merge with an existing active powerup
+      const existing = this.state.activePowerups.find(a => registry.canMerge(a, p));
+      if (existing && def.merge) {
+        // Simulate merge on a clone to get the preview description
+        const clone = { ...existing };
+        def.merge(clone, p);
+        p.mergePreview = {
+          currentLevel: existing.level,
+          newLevel: clone.level,
+          newDescription: clone.description,
+        };
+      }
+
       options.push(p);
     }
 

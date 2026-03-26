@@ -90,6 +90,12 @@ export interface PowerupInstance {
   value: number;
   consumable: boolean;
   level: number;
+  /** Set during option generation if this would merge with an existing powerup */
+  mergePreview?: {
+    currentLevel: number;
+    newLevel: number;
+    newDescription: string;
+  };
 }
 
 /** Definition of a powerup type — registered once in the registry */
