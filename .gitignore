@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.claude/agents/client-programmer.md
+.claude/agents/code-reviewer.md
+.claude/agents/game-designer.md
+.claude/agents/ui-ux-designer.md
