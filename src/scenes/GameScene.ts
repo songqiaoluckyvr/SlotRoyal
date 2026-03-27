@@ -23,6 +23,7 @@ import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
 import { rng } from '../utils/Rng';
 import { Starfield } from '../ui/Starfield';
+import { createSpinSparkles, celebrationFireworks } from '../ui/Particles';
 
 type GamePhase = 'idle' | 'spinning' | 'powerup';
 
@@ -34,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private phase: GamePhase = 'idle';
   private warnBorder?: Phaser.GameObjects.Rectangle;
   private starfield!: Starfield;
+  private spinSparkles?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor() {
     super('Game');
@@ -92,6 +94,9 @@ export class GameScene extends Phaser.Scene {
     this.phase = 'spinning';
     this.hud.setSpinEnabled(false);
 
+    // Start spin sparkles over the grid area
+    this.spinSparkles = createSpinSparkles(this, 450, 340, 500, 400);
+
     const bet = placeBet(this.state);
     const betAmount = bet > 0 ? bet : this.state.currentBet;
     this.refreshUI();
@@ -146,6 +151,15 @@ export class GameScene extends Phaser.Scene {
 
     // Animate spin — exclude sticky wilds which are already shown
     const onSpinComplete = () => {
+      // Stop spin sparkles
+      if (this.spinSparkles) {
+        this.spinSparkles.stop();
+        this.time.delayedCall(800, () => {
+          this.spinSparkles?.destroy();
+          this.spinSparkles = undefined;
+        });
+      }
+
       const paylines = generatePaylines(this.state.gridRows, this.state.gridCols);
       const wins = evaluatePaylines(result, paylines, betAmount);
 
@@ -177,6 +191,9 @@ export class GameScene extends Phaser.Scene {
       if (totalWin > 0) {
         addWinnings(this.state, totalWin);
         this.hud.showWin(totalWin);
+        // Fireworks — scale with win size
+        const burstCount = totalWin >= betAmount * 10 ? 5 : totalWin >= betAmount * 3 ? 3 : 1;
+        celebrationFireworks(this, 450, 340, burstCount);
       }
 
       this.refreshUI();
@@ -392,7 +409,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onSkipLevel(): void {
-    this.showLevelClear();
+    if (this.phase !== 'idle') return;
+    this.phase = 'powerup';
+
+    const W = this.cameras.main.width;
+    const H = this.cameras.main.height;
+    const remaining = this.state.spinsRemaining + this.state.freeSpinsRemaining;
+    const bonus = remaining * 10;
+
+    const overlay = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.75).setDepth(200);
+
+    const title = this.add.text(W / 2, H / 2 - 60, 'Skip to next level?', {
+      fontSize: '24px', color: '#ffcc00', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(201);
+
+    const info = this.add.text(W / 2, H / 2 - 15, `${remaining} remaining spins x $10 = +$${bonus} bankroll`, {
+      fontSize: '16px', color: '#cccccc', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(201);
+
+    const yesBtn = this.add.text(W / 2 - 80, H / 2 + 40, '[ YES ]', {
+      fontSize: '22px', color: '#44ff44', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(201);
+
+    const noBtn = this.add.text(W / 2 + 80, H / 2 + 40, '[ NO ]', {
+      fontSize: '22px', color: '#ff4444', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(201);
+
+    const cleanup = () => {
+      overlay.destroy();
+      title.destroy();
+      info.destroy();
+      yesBtn.destroy();
+      noBtn.destroy();
+    };
+
+    yesBtn.on('pointerover', () => yesBtn.setColor('#88ff88'));
+    yesBtn.on('pointerout', () => yesBtn.setColor('#44ff44'));
+    yesBtn.on('pointerdown', () => {
+      this.state.bankroll += bonus;
+      this.state.spinsRemaining = 0;
+      this.state.freeSpinsRemaining = 0;
+      cleanup();
+      this.showLevelClear();
+    });
+
+    noBtn.on('pointerover', () => noBtn.setColor('#ff8888'));
+    noBtn.on('pointerout', () => noBtn.setColor('#ff4444'));
+    noBtn.on('pointerdown', () => {
+      cleanup();
+      this.phase = 'idle';
+      this.hud.setSpinEnabled(canSpin(this.state));
+    });
   }
 
   private openInfo(): void {
