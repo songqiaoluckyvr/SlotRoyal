@@ -29,11 +29,8 @@ const def: PowerupDef = {
 
   hooks: {
     onAfterSpin: (state, powerup, totalWin, bet) => {
-      if (totalWin > 0) {
-        // Win — reset flag so next losing spin can trigger
-        state.runtime.secondChanceTriggered = false;
-      } else if (!state.runtime.secondChanceTriggered && powerup.value > 0) {
-        // Loss + not already triggered this spin cycle — use one charge
+      // Only trigger on a loss, if charges remain and not already triggered
+      if (totalWin === 0 && !state.runtime.secondChanceTriggered && powerup.value > 0) {
         powerup.value--;
         state.runtime.secondChanceTriggered = true;
         state.spinsRemaining++;
@@ -45,6 +42,7 @@ const def: PowerupDef = {
 
     onLevelStart: (state, _powerup) => {
       state.runtime.secondChanceUsedThisLevel = 0;
+      state.runtime.secondChanceTriggered = false;
     },
   },
 };

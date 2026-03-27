@@ -58,7 +58,7 @@ export class HUD {
     const bottomY = 670;
 
     this.bankrollText = this.scene.add.text(20, bottomY, '', {
-      fontSize: '22px', color: '#44ff44', fontFamily: 'monospace', fontStyle: 'bold',
+      fontSize: '30px', color: '#44ff44', fontFamily: 'monospace', fontStyle: 'bold',
     });
 
     this.spinsText = this.scene.add.text(20, bottomY + 30, '', {
@@ -106,8 +106,10 @@ export class HUD {
 
     // Skip button (hidden by default, shown when target reached)
     this.skipBtn = this.scene.add.text(W - 100, bottomY + 50, '[ SKIP → ]', {
-      fontSize: '16px', color: '#aaaaff', fontFamily: 'monospace',
+      fontSize: '18px', color: '#aaaaff', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.skipBtn.on('pointerover', () => this.skipBtn.setColor('#ffffff'));
+    this.skipBtn.on('pointerout', () => this.skipBtn.setColor('#aaaaff'));
 
   }
 

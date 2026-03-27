@@ -14,10 +14,11 @@ export class BootScene extends Phaser.Scene {
 
     // Load UI assets
     this.load.image('logo', '/ui/logo.png');
+    this.load.image('logo2', '/ui/logo2.png');
     this.load.image('spin_btn', '/ui/spin_button.png');
   }
 
   create(): void {
-    this.scene.start('Game');
+    this.scene.start('MainMenu');
   }
 }

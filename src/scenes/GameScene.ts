@@ -17,6 +17,7 @@ import {
 } from '../state/RunState';
 import { registry, type PowerupInstance } from '../powerups/index';
 import { TIER_WEIGHTS_BY_THRESHOLD, type Rarity, type PowerupTier } from '../state/PowerupDefs';
+import { getLevelConfig, MAX_LEVEL } from '../core/LevelConfig';
 import { SlotGrid } from '../ui/SlotGrid';
 import { HUD } from '../ui/HUD';
 import { PowerupSlots } from '../ui/PowerupSlots';
@@ -204,8 +205,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      // Check for second chance re-spin — keep flag true so it doesn't retrigger
+      // Check for second chance re-spin — consume the flag immediately
       if (this.state.runtime.secondChanceTriggered) {
+        this.state.runtime.secondChanceTriggered = false;
         this.time.delayedCall(300, () => {
           this.phase = 'idle';
           this.onSpin(); // trigger a free re-spin
@@ -294,8 +296,39 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Auto-advance if no spins left and level cleared (non-final levels)
     if (this.state.spinsRemaining <= 0 && this.state.freeSpinsRemaining <= 0 && isLevelCleared(this.state)) {
-      this.onSkipLevel();
+      this.showLevelClear();
+      return;
+    }
+
+    // Level 10 (final): when spins run out, go to game over with score
+    if (this.state.spinsRemaining <= 0 && this.state.freeSpinsRemaining <= 0 && this.state.level >= MAX_LEVEL) {
+      this.state.runActive = false;
+      this.time.delayedCall(500, () => {
+        this.scene.start('GameOver', {
+          level: this.state.level,
+          bankroll: this.state.bankroll,
+          finalScore: this.state.levelEarnings,
+        });
+      });
+      return;
+    }
+
+    // Final catch: no spins left, auto-trigger appropriate popup
+    if (this.state.spinsRemaining <= 0 && this.state.freeSpinsRemaining <= 0) {
+      if (isLevelCleared(this.state) && this.state.level < MAX_LEVEL) {
+        this.time.delayedCall(500, () => this.showLevelClear());
+        return;
+      }
+      this.state.runActive = false;
+      this.time.delayedCall(500, () => {
+        this.scene.start('GameOver', {
+          level: this.state.level,
+          bankroll: this.state.bankroll,
+          finalScore: this.state.level >= MAX_LEVEL ? this.state.levelEarnings : undefined,
+        });
+      });
       return;
     }
 
@@ -303,14 +336,63 @@ export class GameScene extends Phaser.Scene {
     this.hud.setSpinEnabled(canSpin(this.state));
   }
 
-  private onSkipLevel(): void {
+  private showLevelClear(): void {
+    this.phase = 'powerup';
+    const W = this.cameras.main.width;
+    const H = this.cameras.main.height;
+
+    const overlay = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.7).setDepth(200);
+
+    const nextConfig = getLevelConfig(this.state.level + 1);
+    const isFinal = this.state.level + 1 > MAX_LEVEL;
+
+    const title = this.add.text(W / 2, H / 2 - 60, 'LEVEL CLEARED!', {
+      fontSize: '36px', color: '#ffcc00', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(201).setScale(0.5);
+
+    this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.easeOut' });
+
+    const earnings = this.add.text(W / 2, H / 2 - 10, `Earned: $${this.state.levelEarnings} / $${this.state.target}`, {
+      fontSize: '18px', color: '#aaaaaa', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(201);
+
+    const nextText = isFinal
+      ? 'Final level — earn as much as you can!'
+      : `Next: Level ${this.state.level + 1} — Target: $${nextConfig.target}`;
+    const next = this.add.text(W / 2, H / 2 + 20, nextText, {
+      fontSize: '14px', color: '#cccccc', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(201);
+
+    const btn = this.add.text(W / 2, H / 2 + 70, isFinal ? '[ FINAL LEVEL ]' : '[ CONTINUE ]', {
+      fontSize: '22px', color: '#44ff44', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(201);
+
+    btn.on('pointerover', () => btn.setColor('#88ff88'));
+    btn.on('pointerout', () => btn.setColor('#44ff44'));
+    btn.on('pointerdown', () => {
+      overlay.destroy();
+      title.destroy();
+      earnings.destroy();
+      next.destroy();
+      btn.destroy();
+      this.doAdvanceLevel();
+    });
+  }
+
+  private doAdvanceLevel(): void {
     advanceLevel(this.state);
+    // Reset second chance flag to prevent stale auto-spins in new level
+    this.state.runtime.secondChanceTriggered = false;
     recalcGridSize(this.state);
     this.grid.build(this.state.gridRows, this.state.gridCols, 450, 340);
     this.grid.reset();
     this.refreshUI();
     this.phase = 'idle';
     this.hud.setSpinEnabled(canSpin(this.state));
+  }
+
+  private onSkipLevel(): void {
+    this.showLevelClear();
   }
 
   private openInfo(): void {
